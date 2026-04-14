@@ -1,0 +1,1 @@
+ALTER TABLE `notifications` MODIFY COLUMN `type` enum('rent_reminder','payment_confirmation','payment_request','payment_received','overdue_alert','subscription_expiry','general') NOT NULL;

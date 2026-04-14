@@ -1,0 +1,2 @@
+ALTER TABLE `landlords` ADD `onboardingStatus` enum('not_started','in_progress','completed','skipped') DEFAULT 'not_started' NOT NULL;--> statement-breakpoint
+ALTER TABLE `landlords` ADD `onboardingCompletedAt` timestamp;
