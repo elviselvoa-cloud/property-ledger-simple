@@ -13,3 +13,135 @@ export const supabase = createClient(
   SUPABASE_URL || "",
   SUPABASE_ANON_KEY || ""
 );
+
+// ─── TypeScript types matching the PostgreSQL schema ──────────
+export type User = {
+  id: number;
+  auth_id: string;
+  open_id: string | null;
+  name: string | null;
+  email: string | null;
+  login_method: string | null;
+  role: "user" | "admin";
+  created_at: string;
+  updated_at: string;
+  last_signed_in: string;
+};
+
+export type Landlord = {
+  id: number;
+  user_id: number;
+  business_name: string | null;
+  phone: string | null;
+  address: string | null;
+  city: string | null;
+  country: string | null;
+  subscription_plan: "free" | "basic" | "pro";
+  subscription_status: "active" | "expired" | "cancelled" | "past_due";
+  subscription_expires_at: string | null;
+  trial_ends_at: string | null;
+  is_active: boolean;
+  onboarding_status: "not_started" | "in_progress" | "completed" | "skipped";
+  onboarding_completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type Property = {
+  id: number;
+  landlord_id: number;
+  name: string;
+  address: string;
+  city: string | null;
+  property_type: "residential" | "commercial" | "mixed";
+  total_units: number;
+  description: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type Unit = {
+  id: number;
+  property_id: number;
+  landlord_id: number;
+  unit_number: string;
+  floor: string | null;
+  bedrooms: number;
+  bathrooms: number;
+  size: number | null;
+  rent_amount: number;
+  deposit_amount: number | null;
+  status: "vacant" | "occupied" | "maintenance";
+  description: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type Tenant = {
+  id: number;
+  landlord_id: number;
+  first_name: string;
+  last_name: string;
+  email: string | null;
+  phone: string | null;
+  national_id: string | null;
+  emergency_contact: string | null;
+  emergency_phone: string | null;
+  notes: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type Lease = {
+  id: number;
+  landlord_id: number;
+  tenant_id: number;
+  unit_id: number;
+  start_date: string;
+  end_date: string | null;
+  rent_amount: number;
+  deposit_amount: number | null;
+  deposit_paid: boolean;
+  rent_due_day: number;
+  status: "active" | "expired" | "terminated" | "pending";
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type RentInvoice = {
+  id: number;
+  landlord_id: number;
+  lease_id: number;
+  tenant_id: number;
+  unit_id: number;
+  invoice_number: string;
+  amount: number;
+  due_date: string;
+  period_month: number;
+  period_year: number;
+  status: "pending" | "paid" | "overdue" | "partial" | "cancelled";
+  paid_amount: number;
+  paid_at: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type Payment = {
+  id: number;
+  landlord_id: number;
+  invoice_id: number | null;
+  tenant_id: number;
+  amount: number;
+  payment_method: "mpesa" | "bank_transfer" | "cash" | "other";
+  mpesa_transaction_id: string | null;
+  bank_reference: string | null;
+  receipt_number: string | null;
+  payment_date: string;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+};
