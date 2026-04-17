@@ -29,7 +29,7 @@ function GuestRoute({ component: Component }: { component: React.ComponentType }
       </div>
     );
   }
-  if (user) return <Redirect to="/" />;
+  if (user) return <Redirect to="/dashboard" />;
   return <Component />;
 }
 
@@ -40,7 +40,8 @@ function Router() {
       <Route path="/signup">{() => <GuestRoute component={Signup} />}</Route>
       <Route path="/forgot-password">{() => <GuestRoute component={ForgotPassword} />}</Route>
       <Route path="/reset-password" component={ResetPassword} />
-      <Route path="/">{() => <ProtectedRoute component={Index} />}</Route>
+      <Route path="/dashboard">{() => <ProtectedRoute component={Index} />}</Route>
+      <Route path="/">{() => <Redirect to="/dashboard" />}</Route>
       <Route>
         <div className="min-h-screen flex items-center justify-center">
           <h1 className="text-2xl font-semibold text-muted-foreground">Page not found</h1>

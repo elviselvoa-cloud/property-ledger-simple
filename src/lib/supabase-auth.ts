@@ -1,7 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 
 export async function signUp(email: string, password: string, fullName?: string) {
-  const redirectUrl = getRedirectUrl();
+  const redirectUrl = getRedirectUrl("/dashboard");
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
@@ -42,7 +42,7 @@ export async function updatePassword(newPassword: string) {
 }
 
 export async function signInWithGoogle() {
-  const redirectUrl = getRedirectUrl();
+  const redirectUrl = getRedirectUrl("/dashboard");
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: "google",
     options: { redirectTo: redirectUrl },
@@ -51,9 +51,9 @@ export async function signInWithGoogle() {
 }
 
 function getRedirectUrl(path: string = "/") {
-  // Use Vercel production URL if available, otherwise current origin
   if (typeof window !== "undefined") {
     return `${window.location.origin}${path}`;
   }
   return path;
 }
+

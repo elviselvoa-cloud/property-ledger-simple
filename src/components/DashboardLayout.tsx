@@ -20,7 +20,7 @@ import { signOut } from "@/lib/supabase-auth";
 import { toast } from "sonner";
 
 const navItems = [
-  { to: "/", label: "Dashboard", icon: LayoutDashboard },
+  { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { to: "/properties", label: "Properties", icon: Building2 },
   { to: "/units", label: "Units", icon: DoorOpen },
   { to: "/tenants", label: "Tenants", icon: Users },
