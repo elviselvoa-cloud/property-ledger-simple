@@ -6,6 +6,13 @@ import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
+import Properties from "./pages/Properties";
+import Units from "./pages/Units";
+import Tenants from "./pages/Tenants";
+import Leases from "./pages/Leases";
+import Invoices from "./pages/Invoices";
+import Payments from "./pages/Payments";
+import Settings from "./pages/Settings";
 
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
   const { user, loading } = useAuth();
@@ -41,6 +48,13 @@ function Router() {
       <Route path="/forgot-password">{() => <GuestRoute component={ForgotPassword} />}</Route>
       <Route path="/reset-password" component={ResetPassword} />
       <Route path="/dashboard">{() => <ProtectedRoute component={Index} />}</Route>
+      <Route path="/properties">{() => <ProtectedRoute component={Properties} />}</Route>
+      <Route path="/units">{() => <ProtectedRoute component={Units} />}</Route>
+      <Route path="/tenants">{() => <ProtectedRoute component={Tenants} />}</Route>
+      <Route path="/leases">{() => <ProtectedRoute component={Leases} />}</Route>
+      <Route path="/invoices">{() => <ProtectedRoute component={Invoices} />}</Route>
+      <Route path="/payments">{() => <ProtectedRoute component={Payments} />}</Route>
+      <Route path="/settings">{() => <ProtectedRoute component={Settings} />}</Route>
       <Route path="/">{() => <Redirect to="/dashboard" />}</Route>
       <Route>
         <div className="min-h-screen flex items-center justify-center">
