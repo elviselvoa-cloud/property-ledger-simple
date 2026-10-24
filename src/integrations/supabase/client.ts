@@ -36,6 +36,8 @@ export type Landlord = {
   address: string | null;
   city: string | null;
   country: string | null;
+  mpesa_paybill?: string | null;
+  payment_instructions?: string | null;
   subscription_plan: "free" | "basic" | "pro";
   subscription_status: "active" | "expired" | "cancelled" | "past_due";
   subscription_expires_at: string | null;
