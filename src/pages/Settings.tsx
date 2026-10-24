@@ -48,7 +48,7 @@ type PayForm = {
 export default function Settings() {
   const { user } = useAuth();
   const { landlordId, loading: landlordLoading, error: landlordError } = useLandlord();
-  const [navigate] = useLocation();
+  const [, navigate] = useLocation();
 
   const [loading, setLoading] = useState(true);
   const [savingOrg, setSavingOrg] = useState(false);
