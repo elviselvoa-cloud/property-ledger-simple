@@ -30,12 +30,29 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { useLandlord } from "@/hooks/useLandlord";
 import {
+  printReceipt,
+  shareReceiptOnWhatsApp,
+  periodLabel,
+  type ReceiptData,
+} from "@/lib/receipt";
+import {
   supabase,
+  type Landlord,
   type Payment,
+  type Property,
   type RentInvoice,
   type Tenant,
+  type Unit,
 } from "@/integrations/supabase/client";
-import { Loader2, Pencil, Plus, Trash2, Wallet } from "lucide-react";
+import {
+  Loader2,
+  MessageCircle,
+  Pencil,
+  Plus,
+  Printer,
+  Trash2,
+  Wallet,
+} from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 
@@ -70,6 +87,9 @@ export default function Payments() {
   const [rows, setRows] = useState<Payment[]>([]);
   const [invoices, setInvoices] = useState<RentInvoice[]>([]);
   const [tenants, setTenants] = useState<Tenant[]>([]);
+  const [units, setUnits] = useState<Unit[]>([]);
+  const [properties, setProperties] = useState<Property[]>([]);
+  const [landlordProfile, setLandlordProfile] = useState<Landlord | null>(null);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -79,7 +99,7 @@ export default function Payments() {
   const load = useCallback(async () => {
     if (!landlordId) return;
     setLoading(true);
-    const [payRes, invRes, tenantsRes] = await Promise.all([
+    const [payRes, invRes, tenantsRes, unitsRes, propsRes, llRes] = await Promise.all([
       supabase
         .from("payments")
         .select("*")
@@ -90,7 +110,13 @@ export default function Payments() {
         .select("*")
         .eq("landlord_id", landlordId)
         .order("due_date", { ascending: true }),
-      supabase.from("tenants").select("id, first_name, last_name").eq("landlord_id", landlordId),
+      supabase
+        .from("tenants")
+        .select("id, first_name, last_name, phone")
+        .eq("landlord_id", landlordId),
+      supabase.from("units").select("id, unit_number, property_id").eq("landlord_id", landlordId),
+      supabase.from("properties").select("id, name").eq("landlord_id", landlordId),
+      supabase.from("landlords").select("*").eq("id", landlordId).maybeSingle(),
     ]);
     if (payRes.error) toast.error(payRes.error.message);
     else setRows((payRes.data ?? []) as Payment[]);
@@ -98,6 +124,12 @@ export default function Payments() {
     else setInvoices((invRes.data ?? []) as RentInvoice[]);
     if (tenantsRes.error) toast.error(tenantsRes.error.message);
     else setTenants((tenantsRes.data ?? []) as Tenant[]);
+    if (unitsRes.error) toast.error(unitsRes.error.message);
+    else setUnits((unitsRes.data ?? []) as Unit[]);
+    if (propsRes.error) toast.error(propsRes.error.message);
+    else setProperties((propsRes.data ?? []) as Property[]);
+    if (llRes.error) toast.error(llRes.error.message);
+    else setLandlordProfile((llRes.data ?? null) as Landlord | null);
     setLoading(false);
   }, [landlordId]);
 
@@ -111,6 +143,43 @@ export default function Payments() {
   };
 
   const balance = (inv: RentInvoice) => Number(inv.amount) - Number(inv.paid_amount ?? 0);
+
+  const receiptFor = (p: Payment): ReceiptData => {
+    const inv = invoices.find((i) => i.id === p.invoice_id);
+    const unit = inv ? units.find((u) => u.id === inv.unit_id) : undefined;
+    const property = unit ? properties.find((pr) => pr.id === unit.property_id) : undefined;
+    const tenant = tenants.find((t) => t.id === p.tenant_id);
+    return {
+      receiptNo: `PL-${String(p.id).padStart(6, "0")}`,
+      landlordName: landlordProfile?.business_name ?? "Property Ledger",
+      landlordPhone: landlordProfile?.phone ?? null,
+      paybill: landlordProfile?.mpesa_paybill ?? null,
+      paymentInstructions: landlordProfile?.payment_instructions ?? null,
+      tenantName: tenant ? `${tenant.first_name} ${tenant.last_name}` : "Tenant",
+      tenantPhone: tenant?.phone ?? null,
+      invoiceNumber: inv?.invoice_number ?? null,
+      period: inv ? periodLabel(inv.period_month, inv.period_year) : null,
+      unitLabel: unit
+        ? [property?.name, unit.unit_number].filter(Boolean).join(" · ")
+        : null,
+      amount: Number(p.amount),
+      paymentMethod: METHOD_LABELS[p.payment_method],
+      reference: p.mpesa_transaction_id ?? p.bank_reference ?? p.receipt_number ?? null,
+      paymentDate: p.payment_date.slice(0, 10),
+    };
+  };
+
+  const onPrint = (p: Payment) => {
+    if (!printReceipt(receiptFor(p))) {
+      toast.error("Allow pop-ups for this site to print receipts");
+    }
+  };
+
+  const onShare = (p: Payment) => {
+    if (!shareReceiptOnWhatsApp(receiptFor(p))) {
+      toast.error("Allow pop-ups for this site to open WhatsApp");
+    }
+  };
 
   const openBalance = (inv: RentInvoice) => {
     if (inv.status === "pending" && new Date(inv.due_date) < new Date(new Date().toDateString())) {
