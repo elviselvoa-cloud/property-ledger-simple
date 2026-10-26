@@ -375,6 +375,7 @@ export default function Payments() {
                     <TableHead>Method</TableHead>
                     <TableHead>Reference</TableHead>
                     <TableHead>Date</TableHead>
+                    <TableHead className="w-20">Receipt</TableHead>
                     <TableHead className="w-24" />
                   </TableRow>
                 </TableHeader>
@@ -404,6 +405,26 @@ export default function Payments() {
                         </TableCell>
                         <TableCell className="text-muted-foreground">
                           {p.payment_date.slice(0, 10)}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex justify-end gap-1">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              title="Share receipt on WhatsApp"
+                              onClick={() => onShare(p)}
+                            >
+                              <MessageCircle className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              title="Print receipt"
+                              onClick={() => onPrint(p)}
+                            >
+                              <Printer className="h-4 w-4" />
+                            </Button>
+                          </div>
                         </TableCell>
                         <TableCell>
                           <div className="flex justify-end gap-1">
