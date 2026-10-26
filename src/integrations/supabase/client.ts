@@ -96,6 +96,8 @@ export type Tenant = {
   updated_at: string;
 };
 
+export type RoommateEntry = { tenant_id: number; share: number | null };
+
 export type Lease = {
   id: number;
   landlord_id: number;
@@ -107,6 +109,9 @@ export type Lease = {
   deposit_amount: number | null;
   deposit_paid: boolean;
   rent_due_day: number;
+  is_roommate: boolean;
+  billing_mode: "shared" | "separate";
+  roommates: RoommateEntry[] | null;
   status: "active" | "expired" | "terminated" | "pending";
   notes: string | null;
   created_at: string;
