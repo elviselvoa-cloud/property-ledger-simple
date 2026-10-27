@@ -41,6 +41,8 @@ import { FileText, Loader2, Pencil, Plus, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 
+type RoommateForm = { tenant_id: string; share: string };
+
 type FormState = {
   tenant_id: string;
   unit_id: string;
@@ -51,6 +53,9 @@ type FormState = {
   deposit_paid: boolean;
   rent_due_day: string;
   status: Lease["status"];
+  is_roommate: boolean;
+  billing_mode: "shared" | "separate";
+  roommates: RoommateForm[];
   notes: string;
 };
 
@@ -64,6 +69,9 @@ const emptyForm: FormState = {
   deposit_paid: false,
   rent_due_day: "1",
   status: "active",
+  is_roommate: false,
+  billing_mode: "shared",
+  roommates: [],
   notes: "",
 };
 
@@ -167,6 +175,12 @@ export default function Leases() {
       deposit_paid: l.deposit_paid,
       rent_due_day: String(l.rent_due_day ?? 1),
       status: l.status,
+      is_roommate: l.is_roommate ?? false,
+      billing_mode: l.billing_mode ?? "shared",
+      roommates: (l.roommates ?? []).map((r) => ({
+        tenant_id: String(r.tenant_id),
+        share: r.share != null ? String(r.share) : "",
+      })),
       notes: l.notes ?? "",
     });
     setOpen(true);
@@ -198,6 +212,29 @@ export default function Leases() {
       toast.error("Rent due day must be between 1 and 31");
       return;
     }
+
+    // Roommate entries: kept when co-staying, cleared otherwise.
+    const roommateEntries = form.is_roommate
+      ? form.roommates
+          .filter((r) => r.tenant_id)
+          .map((r) => ({
+            tenant_id: Number(r.tenant_id),
+            share: form.billing_mode === "separate" ? Number(r.share) || 0 : null,
+          }))
+      : [];
+
+    if (form.is_roommate && form.billing_mode === "separate") {
+      if (roommateEntries.length === 0) {
+        toast.error("Add at least one roommate with a share");
+        return;
+      }
+      const totalShares = roommateEntries.reduce((s, r) => s + (r.share ?? 0), 0);
+      if (totalShares > Number(form.rent_amount)) {
+        toast.error("Roommate shares exceed the monthly rent");
+        return;
+      }
+    }
+
     setSaving(true);
     const payload = {
       landlord_id: landlordId,
@@ -210,6 +247,9 @@ export default function Leases() {
       deposit_paid: form.deposit_paid,
       rent_due_day: dueDay,
       status: form.status,
+      is_roommate: form.is_roommate,
+      billing_mode: form.billing_mode,
+      roommates: roommateEntries,
       notes: form.notes.trim() || null,
     };
     const { error } = editing
@@ -471,6 +511,143 @@ export default function Leases() {
               <Label htmlFor="dep_paid" className="font-normal cursor-pointer">
                 Deposit has been paid
               </Label>
+            </div>
+            <div className="grid gap-2 rounded-md border p-3">
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="is_roommate"
+                  checked={form.is_roommate}
+                  onCheckedChange={(v) => setForm({ ...form, is_roommate: v === true })}
+                />
+                <Label htmlFor="is_roommate" className="font-normal cursor-pointer">
+                  Roommates / co-staying (more than one tenant on this unit)
+                </Label>
+              </div>
+              {form.is_roommate && (
+                <div className="grid gap-3 pt-1">
+                  <div className="grid gap-2">
+                    <Label>Billing</Label>
+                    <Select
+                      value={form.billing_mode}
+                      onValueChange={(v) =>
+                        setForm({ ...form, billing_mode: v as "shared" | "separate" })
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="shared">
+                          Shared — one invoice, roommates settle with the primary tenant
+                        </SelectItem>
+                        <SelectItem value="separate">
+                          Separate — each roommate billed their own share
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {form.billing_mode === "separate" && (
+                    <div className="grid gap-2">
+                      <Label>Roommates & monthly share (KES)</Label>
+                      {form.roommates.map((r, i) => (
+                        <div key={i} className="flex items-center gap-2">
+                          <Select
+                            value={r.tenant_id}
+                            onValueChange={(v) =>
+                              setForm((f) => ({
+                                ...f,
+                                roommates: f.roommates.map((x, j) =>
+                                  j === i ? { ...x, tenant_id: v } : x
+                                ),
+                              }))
+                            }
+                          >
+                            <SelectTrigger className="flex-1">
+                              <SelectValue placeholder="Select tenant" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {tenants
+                                .filter((t) => String(t.id) !== form.tenant_id)
+                                .map((t) => (
+                                  <SelectItem key={t.id} value={String(t.id)}>
+                                    {t.first_name} {t.last_name}
+                                  </SelectItem>
+                                ))}
+                            </SelectContent>
+                          </Select>
+                          <Input
+                            type="number"
+                            min={0}
+                            placeholder="Share"
+                            className="w-32"
+                            value={r.share}
+                            onChange={(e) =>
+                              setForm((f) => ({
+                                ...f,
+                                roommates: f.roommates.map((x, j) =>
+                                  j === i ? { ...x, share: e.target.value } : x
+                                ),
+                              }))
+                            }
+                          />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            onClick={() =>
+                              setForm((f) => ({
+                                ...f,
+                                roommates: f.roommates.filter((_, j) => j !== i),
+                              }))
+                            }
+                          >
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </div>
+                      ))}
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="w-fit"
+                        onClick={() =>
+                          setForm((f) => ({
+                            ...f,
+                            roommates: [...f.roommates, { tenant_id: "", share: "" }],
+                          }))
+                        }
+                      >
+                        <Plus className="h-4 w-4 mr-1" /> Add roommate
+                      </Button>
+                      {(() => {
+                        const rent = Number(form.rent_amount) || 0;
+                        const shares = form.roommates.reduce(
+                          (s, r) => s + (Number(r.share) || 0),
+                          0
+                        );
+                        const remainder = rent - shares;
+                        const primary = form.tenant_id ? tenantName(Number(form.tenant_id)) : "";
+                        return (
+                          <p className="text-xs text-muted-foreground">
+                            {remainder > 0
+                              ? `${primary || "The primary tenant"} will be billed the remaining KES ${remainder.toLocaleString()}.`
+                              : remainder === 0
+                                ? "Roommate shares cover the full rent — no primary invoice."
+                                : "Shares exceed the monthly rent."}
+                          </p>
+                        );
+                      })()}
+                    </div>
+                  )}
+                  {form.billing_mode === "shared" && (
+                    <p className="text-xs text-muted-foreground">
+                      One invoice covers the whole unit and goes to{" "}
+                      {form.tenant_id ? tenantName(Number(form.tenant_id)) : "the primary tenant"};
+                      roommates settle with them directly.
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
             <div className="grid gap-2">
               <Label htmlFor="notes">Notes</Label>
