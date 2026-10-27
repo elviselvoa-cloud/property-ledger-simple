@@ -32,5 +32,11 @@ COMMENT ON COLUMN leases.roommates IS
 
 CREATE INDEX IF NOT EXISTS leases_is_roommate_idx ON leases(is_roommate) WHERE is_roommate;
 
+-- Prevent duplicate invoices for the same lease, tenant and billing period
+-- (split leases bill several tenants on the same lease in one month).
+CREATE UNIQUE INDEX IF NOT EXISTS rent_invoices_lease_tenant_period_uniq
+  ON rent_invoices(lease_id, tenant_id, period_month, period_year)
+  WHERE status <> 'cancelled';
+
 -- No new GRANTs needed: these are columns on the existing leases table,
 -- whose privileges were granted in the earlier migrations.

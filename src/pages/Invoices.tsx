@@ -293,7 +293,7 @@ export default function Invoices() {
     const year = now.getFullYear();
     const { data: existing } = await supabase
       .from("rent_invoices")
-      .select("lease_id")
+      .select("lease_id, tenant_id")
       .eq("landlord_id", landlordId)
       .eq("period_month", month)
       .eq("period_year", year)
