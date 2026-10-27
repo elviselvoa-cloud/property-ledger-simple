@@ -37,6 +37,7 @@ import {
   type Tenant,
   type Unit,
 } from "@/integrations/supabase/client";
+import { participantShares } from "@/lib/roommates";
 import { Loader2, Pencil, Plus, Receipt, Sparkles, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -90,7 +91,7 @@ export default function Invoices() {
         .order("created_at", { ascending: false }),
       supabase
         .from("leases")
-        .select("id, tenant_id, unit_id, rent_amount, rent_due_day, status")
+        .select("id, tenant_id, unit_id, rent_amount, rent_due_day, status, is_roommate, billing_mode, roommates")
         .eq("landlord_id", landlordId)
         .order("created_at", { ascending: false }),
       supabase.from("tenants").select("id, first_name, last_name").eq("landlord_id", landlordId),
@@ -155,7 +156,7 @@ export default function Invoices() {
       period_month: String(now.getMonth() + 1),
       period_year: String(now.getFullYear()),
       due_date: dueDate.toISOString().slice(0, 10),
-      amount: String(lease.rent_amount ?? ""),
+      amount: String(participantShares(lease)[0]?.amount ?? lease.rent_amount ?? ""),
       notes: "",
     });
     setOpen(true);
@@ -181,7 +182,11 @@ export default function Invoices() {
         ? {
             ...f,
             lease_id: leaseId,
-            amount: editing ? f.amount : lease ? String(lease.rent_amount ?? "") : f.amount,
+            amount: editing
+              ? f.amount
+              : lease
+                ? String(participantShares(lease)[0]?.amount ?? lease.rent_amount ?? "")
+                : f.amount,
           }
         : f
     );
@@ -227,25 +232,36 @@ export default function Invoices() {
       }
       toast.success("Invoice updated");
     } else {
+      // One invoice per billed tenant per period: for split (roommate) leases the
+      // first participant without an invoice yet gets this one.
       const { data: existing } = await supabase
         .from("rent_invoices")
-        .select("id")
+        .select("id, tenant_id")
         .eq("lease_id", lease.id)
         .eq("period_month", month)
         .eq("period_year", year)
         .neq("status", "cancelled");
-      if (existing && existing.length > 0) {
+      const billedTenants = new Set((existing ?? []).map((e) => e.tenant_id));
+      const participant = participantShares(lease).find(
+        (p) => p.amount > 0 && !billedTenants.has(p.tenant_id)
+      );
+      if (existing && existing.length > 0 && !participant) {
         setSaving(false);
-        toast.error("This lease already has an invoice for that period");
+        toast.error("Every billed tenant on this lease already has an invoice for that period");
+        return;
+      }
+      if (!participant) {
+        setSaving(false);
+        toast.error("Nothing to bill on this lease");
         return;
       }
       const payload = {
         landlord_id: landlordId,
         lease_id: lease.id,
-        tenant_id: lease.tenant_id,
+        tenant_id: participant.tenant_id,
         unit_id: lease.unit_id,
         invoice_number: generateInvoiceNumber(year, month),
-        amount: Number(form.amount),
+        amount: participant.amount,
         due_date: form.due_date,
         period_month: month,
         period_year: year,
@@ -277,26 +293,48 @@ export default function Invoices() {
     const year = now.getFullYear();
     const { data: existing } = await supabase
       .from("rent_invoices")
-      .select("lease_id")
+      .select("lease_id, tenant_id")
       .eq("landlord_id", landlordId)
       .eq("period_month", month)
       .eq("period_year", year)
       .neq("status", "cancelled");
-    const covered = new Set((existing ?? []).map((e) => e.lease_id));
-    const toInsert = activeLeases
-      .filter((l) => !covered.has(l.id))
-      .map((l) => ({
-        landlord_id: landlordId,
-        lease_id: l.id,
-        tenant_id: l.tenant_id,
-        unit_id: l.unit_id,
-        invoice_number: generateInvoiceNumber(year, month),
-        amount: Number(l.rent_amount),
-        due_date: new Date(Date.UTC(year, month - 1, l.rent_due_day ?? 1)).toISOString(),
-        period_month: month,
-        period_year: year,
-        status: "pending" as const,
-      }));
+    const covered = new Set(
+      (existing ?? []).map((e) => `${e.lease_id}-${e.tenant_id}`)
+    );
+    const toInsert: Array<{
+      landlord_id: number;
+      lease_id: number;
+      tenant_id: number;
+      unit_id: number;
+      invoice_number: string;
+      amount: number;
+      due_date: string;
+      period_month: number;
+      period_year: number;
+      status: "pending";
+    }> = [];
+    for (const l of activeLeases) {
+      // Split (roommate) leases produce one invoice per participant; standard
+      // and shared leases produce a single invoice for the primary tenant.
+      for (const p of participantShares(l)) {
+        if (p.amount <= 0) continue;
+        const key = `${l.id}-${p.tenant_id}`;
+        if (covered.has(key)) continue;
+        covered.add(key);
+        toInsert.push({
+          landlord_id: landlordId,
+          lease_id: l.id,
+          tenant_id: p.tenant_id,
+          unit_id: l.unit_id,
+          invoice_number: generateInvoiceNumber(year, month),
+          amount: p.amount,
+          due_date: new Date(Date.UTC(year, month - 1, l.rent_due_day ?? 1)).toISOString(),
+          period_month: month,
+          period_year: year,
+          status: "pending" as const,
+        });
+      }
+    }
     if (toInsert.length === 0) {
       setGenerating(false);
       toast.info("All active leases already have an invoice for this month");
