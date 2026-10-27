@@ -339,7 +339,14 @@ export default function Leases() {
                 <TableBody>
                   {rows.map((l) => (
                     <TableRow key={l.id}>
-                      <TableCell className="font-medium">{tenantName(l.tenant_id)}</TableCell>
+                      <TableCell className="font-medium">
+                        {tenantName(l.tenant_id)}
+                        {l.is_roommate && (
+                          <span className="ml-1 text-xs text-muted-foreground">
+                            · co-stay ({l.billing_mode})
+                          </span>
+                        )}
+                      </TableCell>
                       <TableCell className="text-muted-foreground">
                         {unitLabel(l.unit_id)}
                       </TableCell>
