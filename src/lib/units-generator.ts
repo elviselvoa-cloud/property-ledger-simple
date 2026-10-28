@@ -31,7 +31,7 @@ export function generateFromRule(
  */
 export function autoDetectFloor(unitNumber: string): string | null {
   const name = unitNumber.trim();
-  if (/^g(?:f)?(?:\D|$)/i.test(name)) return "Ground";
+  if (/^g(?:f|\d|$)/i.test(name)) return "Ground";
   const m = name.match(/^(\d+)/);
   return m ? m[1] : null;
 }
