@@ -286,9 +286,14 @@ export default function Units() {
               Manage individual units within your properties.
             </p>
           </div>
-          <Button onClick={openCreate} disabled={!landlordId}>
-            <Plus className="h-4 w-4 mr-1" /> Add Unit
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={openGenerate} disabled={!landlordId}>
+              <Wand2 className="h-4 w-4 mr-1" /> Generate Units
+            </Button>
+            <Button onClick={openCreate} disabled={!landlordId}>
+              <Plus className="h-4 w-4 mr-1" /> Add Unit
+            </Button>
+          </div>
         </div>
 
         <Card>
@@ -308,9 +313,14 @@ export default function Units() {
                     ? "Add a property first, then create its units."
                     : "Add units and set their monthly rent."}
                 </p>
-                <Button onClick={openCreate} disabled={!landlordId}>
-                  <Plus className="h-4 w-4 mr-1" /> Add Unit
-                </Button>
+                <div className="flex gap-2">
+                  <Button variant="outline" onClick={openGenerate} disabled={!landlordId}>
+                    <Wand2 className="h-4 w-4 mr-1" /> Generate Units
+                  </Button>
+                  <Button onClick={openCreate} disabled={!landlordId}>
+                    <Plus className="h-4 w-4 mr-1" /> Add Unit
+                  </Button>
+                </div>
               </div>
             ) : (
               <Table>
