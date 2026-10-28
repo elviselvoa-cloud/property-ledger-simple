@@ -488,6 +488,201 @@ export default function Units() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <Dialog open={genOpen} onOpenChange={setGenOpen}>
+        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Generate units</DialogTitle>
+            <DialogDescription>
+              Create many similar units at once — great for whole buildings or floors.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4">
+            <div className="grid gap-2">
+              <Label>Property</Label>
+              <Select
+                value={genForm.property_id}
+                onValueChange={(v) => setGenForm({ ...genForm, property_id: v })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select property" />
+                </SelectTrigger>
+                <SelectContent>
+                  {properties.map((p) => (
+                    <SelectItem key={p.id} value={String(p.id)}>
+                      {p.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-2">
+              <Label>How are your units named?</Label>
+              <Select
+                value={genForm.mode}
+                onValueChange={(v) => setGenForm({ ...genForm, mode: v as "rule" | "list" })}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="rule">Follow a pattern (e.g. A1 to A12)</SelectItem>
+                  <SelectItem value="list">I&apos;ll paste the list of names</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {genForm.mode === "rule" ? (
+              <>
+                <div className="grid gap-4 sm:grid-cols-3">
+                  <div className="grid gap-2">
+                    <Label htmlFor="gprefix">Prefix</Label>
+                    <Input
+                      id="gprefix"
+                      placeholder="A"
+                      value={genForm.prefix}
+                      onChange={(e) => setGenForm({ ...genForm, prefix: e.target.value })}
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="gstart">From number</Label>
+                    <Input
+                      id="gstart"
+                      type="number"
+                      min={0}
+                      value={genForm.start}
+                      onChange={(e) => setGenForm({ ...genForm, start: e.target.value })}
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="gend">To number</Label>
+                    <Input
+                      id="gend"
+                      type="number"
+                      min={0}
+                      value={genForm.end}
+                      onChange={(e) => setGenForm({ ...genForm, end: e.target.value })}
+                    />
+                  </div>
+                </div>
+                <div className="grid gap-4 sm:grid-cols-3">
+                  <div className="grid gap-2">
+                    <Label htmlFor="gsuffix">Suffix (optional)</Label>
+                    <Input
+                      id="gsuffix"
+                      placeholder="E"
+                      value={genForm.suffix}
+                      onChange={(e) => setGenForm({ ...genForm, suffix: e.target.value })}
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="gpad">Zero-pad (optional)</Label>
+                    <Input
+                      id="gpad"
+                      type="number"
+                      min={0}
+                      placeholder="2 → A01"
+                      value={genForm.pad}
+                      onChange={(e) => setGenForm({ ...genForm, pad: e.target.value })}
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="gfloor">Floor (optional)</Label>
+                    <Input
+                      id="gfloor"
+                      placeholder="2"
+                      value={genForm.floor}
+                      onChange={(e) => setGenForm({ ...genForm, floor: e.target.value })}
+                    />
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="grid gap-2">
+                <Label htmlFor="glist">Unit names</Label>
+                <Textarea
+                  id="glist"
+                  rows={6}
+                  placeholder={"G1, G2\n2A\n2B"}
+                  value={genForm.list_text}
+                  onChange={(e) => setGenForm({ ...genForm, list_text: e.target.value })}
+                />
+                <p className="text-xs text-muted-foreground">
+                  One name per line or comma-separated. Floors are detected automatically
+                  (G… → Ground, 2A → floor 2) unless you set one below.
+                </p>
+              </div>
+            )}
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid gap-2">
+                <Label htmlFor="gbeds">Bedrooms</Label>
+                <Input
+                  id="gbeds"
+                  type="number"
+                  min={0}
+                  value={genForm.bedrooms}
+                  onChange={(e) => setGenForm({ ...genForm, bedrooms: e.target.value })}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="gbaths">Bathrooms</Label>
+                <Input
+                  id="gbaths"
+                  type="number"
+                  min={0}
+                  value={genForm.bathrooms}
+                  onChange={(e) => setGenForm({ ...genForm, bathrooms: e.target.value })}
+                />
+              </div>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid gap-2">
+                <Label htmlFor="grent">Monthly rent (KES)</Label>
+                <Input
+                  id="grent"
+                  type="number"
+                  min={0}
+                  value={genForm.rent_amount}
+                  onChange={(e) => setGenForm({ ...genForm, rent_amount: e.target.value })}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="gdep">Deposit (KES)</Label>
+                <Input
+                  id="gdep"
+                  type="number"
+                  min={0}
+                  value={genForm.deposit_amount}
+                  onChange={(e) => setGenForm({ ...genForm, deposit_amount: e.target.value })}
+                />
+              </div>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              {genPreview.length > 0 ? (
+                <>
+                  <span className="font-medium text-foreground">{genPreview.length}</span> unit
+                  {genPreview.length > 1 ? "s" : ""}:{" "}
+                  {genPreview
+                    .slice(0, 8)
+                    .map((u) => u.unit_number)
+                    .join(", ")}
+                  {genPreview.length > 8 ? ", …" : ""}
+                </>
+              ) : (
+                "No units yet — fill in the pattern or paste names."
+              )}
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setGenOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={saveGenerate} disabled={genSaving || genPreview.length === 0}>
+              {genSaving && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
+              Create {genPreview.length} unit{genPreview.length === 1 ? "" : "s"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 }
