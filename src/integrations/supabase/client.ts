@@ -152,3 +152,16 @@ export type Payment = {
   created_at: string;
   updated_at: string;
 };
+
+export type Caretaker = {
+  id: number;
+  landlord_id: number;
+  name: string;
+  phone: string | null;
+  email: string | null;
+  national_id: string | null;
+  notes: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+};
