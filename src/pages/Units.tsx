@@ -27,10 +27,12 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Textarea } from "@/components/ui/textarea";
 import { useLandlord } from "@/hooks/useLandlord";
 import { supabase, type Property, type Unit } from "@/integrations/supabase/client";
-import { DoorOpen, Loader2, Pencil, Plus, Trash2 } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { generateFromRule, parseUnitList } from "@/lib/units-generator";
+import { DoorOpen, Loader2, Pencil, Plus, Trash2, Wand2 } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 type FormState = {
@@ -55,6 +57,38 @@ const emptyForm: FormState = {
   status: "vacant",
 };
 
+type GenForm = {
+  property_id: string;
+  mode: "rule" | "list";
+  prefix: string;
+  suffix: string;
+  start: string;
+  end: string;
+  pad: string;
+  floor: string;
+  list_text: string;
+  bedrooms: string;
+  bathrooms: string;
+  rent_amount: string;
+  deposit_amount: string;
+};
+
+const emptyGenForm: GenForm = {
+  property_id: "",
+  mode: "rule",
+  prefix: "",
+  suffix: "",
+  start: "1",
+  end: "10",
+  pad: "",
+  floor: "",
+  list_text: "",
+  bedrooms: "1",
+  bathrooms: "1",
+  rent_amount: "",
+  deposit_amount: "",
+};
+
 const statusVariant: Record<Unit["status"], "default" | "secondary" | "outline"> = {
   occupied: "default",
   vacant: "secondary",
@@ -70,6 +104,9 @@ export default function Units() {
   const [saving, setSaving] = useState(false);
   const [editing, setEditing] = useState<Unit | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm);
+  const [genOpen, setGenOpen] = useState(false);
+  const [genSaving, setGenSaving] = useState(false);
+  const [genForm, setGenForm] = useState<GenForm>(emptyGenForm);
 
   const load = useCallback(async () => {
     if (!landlordId) return;
@@ -161,6 +198,84 @@ export default function Units() {
     }
   };
 
+  const openGenerate = () => {
+    if (properties.length === 0) {
+      toast.error("Add a property first");
+      return;
+    }
+    setGenForm((f) => ({
+      ...emptyGenForm,
+      property_id: f.property_id || String(properties[0].id),
+    }));
+    setGenOpen(true);
+  };
+
+  const genPreview = useMemo(() => {
+    if (genForm.mode === "rule") {
+      return generateFromRule(genForm.prefix.trim(), Number(genForm.start), Number(genForm.end), {
+        suffix: genForm.suffix.trim(),
+        pad: Number(genForm.pad) || 0,
+      });
+    }
+    return parseUnitList(genForm.list_text);
+  }, [genForm]);
+
+  const saveGenerate = async () => {
+    if (!landlordId) return;
+    if (!genForm.property_id) {
+      toast.error("Select a property");
+      return;
+    }
+    if (genPreview.length === 0) {
+      toast.error("No units to create — check the pattern or the list");
+      return;
+    }
+    if (!genForm.rent_amount) {
+      toast.error("Monthly rent is required");
+      return;
+    }
+    setGenSaving(true);
+    // Skip names that already exist on this property.
+    const { data: existing } = await supabase
+      .from("units")
+      .select("unit_number")
+      .eq("landlord_id", landlordId)
+      .eq("property_id", Number(genForm.property_id));
+    const taken = new Set((existing ?? []).map((e) => e.unit_number.toLowerCase()));
+    const fresh = genPreview.filter((u) => !taken.has(u.unit_number.toLowerCase()));
+    if (fresh.length === 0) {
+      setGenSaving(false);
+      toast.error("All of these units already exist for that property");
+      return;
+    }
+    const payload = fresh.map((u) => ({
+      landlord_id: landlordId,
+      property_id: Number(genForm.property_id),
+      unit_number: u.unit_number,
+      floor: genForm.floor.trim() || u.floor,
+      bedrooms: Number(genForm.bedrooms) || 0,
+      bathrooms: Number(genForm.bathrooms) || 0,
+      rent_amount: Number(genForm.rent_amount),
+      deposit_amount: genForm.deposit_amount ? Number(genForm.deposit_amount) : null,
+      status: "vacant" as const,
+    }));
+    const { error } = await supabase.from("units").insert(payload);
+    setGenSaving(false);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    toast.success(
+      `${fresh.length} unit${fresh.length > 1 ? "s" : ""} created${
+        fresh.length < genPreview.length
+          ? ` (${genPreview.length - fresh.length} duplicate${genPreview.length - fresh.length > 1 ? "s" : ""} skipped)`
+          : ""
+      }`
+    );
+    setGenOpen(false);
+    load();
+  };
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
@@ -171,9 +286,14 @@ export default function Units() {
               Manage individual units within your properties.
             </p>
           </div>
-          <Button onClick={openCreate} disabled={!landlordId}>
-            <Plus className="h-4 w-4 mr-1" /> Add Unit
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={openGenerate} disabled={!landlordId}>
+              <Wand2 className="h-4 w-4 mr-1" /> Generate Units
+            </Button>
+            <Button onClick={openCreate} disabled={!landlordId}>
+              <Plus className="h-4 w-4 mr-1" /> Add Unit
+            </Button>
+          </div>
         </div>
 
         <Card>
@@ -193,9 +313,14 @@ export default function Units() {
                     ? "Add a property first, then create its units."
                     : "Add units and set their monthly rent."}
                 </p>
-                <Button onClick={openCreate} disabled={!landlordId}>
-                  <Plus className="h-4 w-4 mr-1" /> Add Unit
-                </Button>
+                <div className="flex gap-2">
+                  <Button variant="outline" onClick={openGenerate} disabled={!landlordId}>
+                    <Wand2 className="h-4 w-4 mr-1" /> Generate Units
+                  </Button>
+                  <Button onClick={openCreate} disabled={!landlordId}>
+                    <Plus className="h-4 w-4 mr-1" /> Add Unit
+                  </Button>
+                </div>
               </div>
             ) : (
               <Table>
@@ -359,6 +484,201 @@ export default function Units() {
             <Button onClick={save} disabled={saving}>
               {saving && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
               {editing ? "Save changes" : "Add unit"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={genOpen} onOpenChange={setGenOpen}>
+        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Generate units</DialogTitle>
+            <DialogDescription>
+              Create many similar units at once — great for whole buildings or floors.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4">
+            <div className="grid gap-2">
+              <Label>Property</Label>
+              <Select
+                value={genForm.property_id}
+                onValueChange={(v) => setGenForm({ ...genForm, property_id: v })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select property" />
+                </SelectTrigger>
+                <SelectContent>
+                  {properties.map((p) => (
+                    <SelectItem key={p.id} value={String(p.id)}>
+                      {p.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-2">
+              <Label>How are your units named?</Label>
+              <Select
+                value={genForm.mode}
+                onValueChange={(v) => setGenForm({ ...genForm, mode: v as "rule" | "list" })}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="rule">Follow a pattern (e.g. A1 to A12)</SelectItem>
+                  <SelectItem value="list">I&apos;ll paste the list of names</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {genForm.mode === "rule" ? (
+              <>
+                <div className="grid gap-4 sm:grid-cols-3">
+                  <div className="grid gap-2">
+                    <Label htmlFor="gprefix">Prefix</Label>
+                    <Input
+                      id="gprefix"
+                      placeholder="A"
+                      value={genForm.prefix}
+                      onChange={(e) => setGenForm({ ...genForm, prefix: e.target.value })}
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="gstart">From number</Label>
+                    <Input
+                      id="gstart"
+                      type="number"
+                      min={0}
+                      value={genForm.start}
+                      onChange={(e) => setGenForm({ ...genForm, start: e.target.value })}
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="gend">To number</Label>
+                    <Input
+                      id="gend"
+                      type="number"
+                      min={0}
+                      value={genForm.end}
+                      onChange={(e) => setGenForm({ ...genForm, end: e.target.value })}
+                    />
+                  </div>
+                </div>
+                <div className="grid gap-4 sm:grid-cols-3">
+                  <div className="grid gap-2">
+                    <Label htmlFor="gsuffix">Suffix (optional)</Label>
+                    <Input
+                      id="gsuffix"
+                      placeholder="E"
+                      value={genForm.suffix}
+                      onChange={(e) => setGenForm({ ...genForm, suffix: e.target.value })}
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="gpad">Zero-pad (optional)</Label>
+                    <Input
+                      id="gpad"
+                      type="number"
+                      min={0}
+                      placeholder="2 → A01"
+                      value={genForm.pad}
+                      onChange={(e) => setGenForm({ ...genForm, pad: e.target.value })}
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="gfloor">Floor (optional)</Label>
+                    <Input
+                      id="gfloor"
+                      placeholder="2"
+                      value={genForm.floor}
+                      onChange={(e) => setGenForm({ ...genForm, floor: e.target.value })}
+                    />
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="grid gap-2">
+                <Label htmlFor="glist">Unit names</Label>
+                <Textarea
+                  id="glist"
+                  rows={6}
+                  placeholder={"G1, G2\n2A\n2B"}
+                  value={genForm.list_text}
+                  onChange={(e) => setGenForm({ ...genForm, list_text: e.target.value })}
+                />
+                <p className="text-xs text-muted-foreground">
+                  One name per line or comma-separated. Floors are detected automatically
+                  (G… → Ground, 2A → floor 2) unless you set one below.
+                </p>
+              </div>
+            )}
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid gap-2">
+                <Label htmlFor="gbeds">Bedrooms</Label>
+                <Input
+                  id="gbeds"
+                  type="number"
+                  min={0}
+                  value={genForm.bedrooms}
+                  onChange={(e) => setGenForm({ ...genForm, bedrooms: e.target.value })}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="gbaths">Bathrooms</Label>
+                <Input
+                  id="gbaths"
+                  type="number"
+                  min={0}
+                  value={genForm.bathrooms}
+                  onChange={(e) => setGenForm({ ...genForm, bathrooms: e.target.value })}
+                />
+              </div>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid gap-2">
+                <Label htmlFor="grent">Monthly rent (KES)</Label>
+                <Input
+                  id="grent"
+                  type="number"
+                  min={0}
+                  value={genForm.rent_amount}
+                  onChange={(e) => setGenForm({ ...genForm, rent_amount: e.target.value })}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="gdep">Deposit (KES)</Label>
+                <Input
+                  id="gdep"
+                  type="number"
+                  min={0}
+                  value={genForm.deposit_amount}
+                  onChange={(e) => setGenForm({ ...genForm, deposit_amount: e.target.value })}
+                />
+              </div>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              {genPreview.length > 0 ? (
+                <>
+                  <span className="font-medium text-foreground">{genPreview.length}</span> unit
+                  {genPreview.length > 1 ? "s" : ""}:{" "}
+                  {genPreview
+                    .slice(0, 8)
+                    .map((u) => u.unit_number)
+                    .join(", ")}
+                  {genPreview.length > 8 ? ", …" : ""}
+                </>
+              ) : (
+                "No units yet — fill in the pattern or paste names."
+              )}
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setGenOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={saveGenerate} disabled={genSaving || genPreview.length === 0}>
+              {genSaving && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
+              Create {genPreview.length} unit{genPreview.length === 1 ? "" : "s"}
             </Button>
           </DialogFooter>
         </DialogContent>
