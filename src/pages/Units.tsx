@@ -27,10 +27,12 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Textarea } from "@/components/ui/textarea";
 import { useLandlord } from "@/hooks/useLandlord";
 import { supabase, type Property, type Unit } from "@/integrations/supabase/client";
-import { DoorOpen, Loader2, Pencil, Plus, Trash2 } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { generateFromRule, parseUnitList } from "@/lib/units-generator";
+import { DoorOpen, Loader2, Pencil, Plus, Trash2, Wand2 } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 type FormState = {
@@ -55,6 +57,38 @@ const emptyForm: FormState = {
   status: "vacant",
 };
 
+type GenForm = {
+  property_id: string;
+  mode: "rule" | "list";
+  prefix: string;
+  suffix: string;
+  start: string;
+  end: string;
+  pad: string;
+  floor: string;
+  list_text: string;
+  bedrooms: string;
+  bathrooms: string;
+  rent_amount: string;
+  deposit_amount: string;
+};
+
+const emptyGenForm: GenForm = {
+  property_id: "",
+  mode: "rule",
+  prefix: "",
+  suffix: "",
+  start: "1",
+  end: "10",
+  pad: "",
+  floor: "",
+  list_text: "",
+  bedrooms: "1",
+  bathrooms: "1",
+  rent_amount: "",
+  deposit_amount: "",
+};
+
 const statusVariant: Record<Unit["status"], "default" | "secondary" | "outline"> = {
   occupied: "default",
   vacant: "secondary",
@@ -70,6 +104,9 @@ export default function Units() {
   const [saving, setSaving] = useState(false);
   const [editing, setEditing] = useState<Unit | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm);
+  const [genOpen, setGenOpen] = useState(false);
+  const [genSaving, setGenSaving] = useState(false);
+  const [genForm, setGenForm] = useState<GenForm>(emptyGenForm);
 
   const load = useCallback(async () => {
     if (!landlordId) return;
