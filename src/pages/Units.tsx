@@ -198,6 +198,84 @@ export default function Units() {
     }
   };
 
+  const openGenerate = () => {
+    if (properties.length === 0) {
+      toast.error("Add a property first");
+      return;
+    }
+    setGenForm((f) => ({
+      ...emptyGenForm,
+      property_id: f.property_id || String(properties[0].id),
+    }));
+    setGenOpen(true);
+  };
+
+  const genPreview = useMemo(() => {
+    if (genForm.mode === "rule") {
+      return generateFromRule(genForm.prefix.trim(), Number(genForm.start), Number(genForm.end), {
+        suffix: genForm.suffix.trim(),
+        pad: Number(genForm.pad) || 0,
+      });
+    }
+    return parseUnitList(genForm.list_text);
+  }, [genForm]);
+
+  const saveGenerate = async () => {
+    if (!landlordId) return;
+    if (!genForm.property_id) {
+      toast.error("Select a property");
+      return;
+    }
+    if (genPreview.length === 0) {
+      toast.error("No units to create — check the pattern or the list");
+      return;
+    }
+    if (!genForm.rent_amount) {
+      toast.error("Monthly rent is required");
+      return;
+    }
+    setGenSaving(true);
+    // Skip names that already exist on this property.
+    const { data: existing } = await supabase
+      .from("units")
+      .select("unit_number")
+      .eq("landlord_id", landlordId)
+      .eq("property_id", Number(genForm.property_id));
+    const taken = new Set((existing ?? []).map((e) => e.unit_number.toLowerCase()));
+    const fresh = genPreview.filter((u) => !taken.has(u.unit_number.toLowerCase()));
+    if (fresh.length === 0) {
+      setGenSaving(false);
+      toast.error("All of these units already exist for that property");
+      return;
+    }
+    const payload = fresh.map((u) => ({
+      landlord_id: landlordId,
+      property_id: Number(genForm.property_id),
+      unit_number: u.unit_number,
+      floor: genForm.floor.trim() || u.floor,
+      bedrooms: Number(genForm.bedrooms) || 0,
+      bathrooms: Number(genForm.bathrooms) || 0,
+      rent_amount: Number(genForm.rent_amount),
+      deposit_amount: genForm.deposit_amount ? Number(genForm.deposit_amount) : null,
+      status: "vacant" as const,
+    }));
+    const { error } = await supabase.from("units").insert(payload);
+    setGenSaving(false);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    toast.success(
+      `${fresh.length} unit${fresh.length > 1 ? "s" : ""} created${
+        fresh.length < genPreview.length
+          ? ` (${genPreview.length - fresh.length} duplicate${genPreview.length - fresh.length > 1 ? "s" : ""} skipped)`
+          : ""
+      }`
+    );
+    setGenOpen(false);
+    load();
+  };
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
