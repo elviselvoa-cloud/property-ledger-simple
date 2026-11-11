@@ -10,6 +10,7 @@ import {
   Wallet,
   Settings,
   HardHat,
+  BarChart3,
   LogOut,
   Menu,
   X,
@@ -29,6 +30,7 @@ const navItems = [
   { to: "/invoices", label: "Invoices", icon: Receipt },
   { to: "/payments", label: "Payments", icon: Wallet },
   { to: "/caretakers", label: "Caretakers", icon: HardHat },
+  { to: "/reports", label: "Reports", icon: BarChart3 },
   { to: "/settings", label: "Settings", icon: Settings },
 ];
 

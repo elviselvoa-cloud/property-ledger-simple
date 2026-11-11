@@ -14,6 +14,7 @@ import Invoices from "./pages/Invoices";
 import Payments from "./pages/Payments";
 import Settings from "./pages/Settings";
 import Caretakers from "./pages/Caretakers";
+import Reports from "./pages/Reports";
 
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
   const { user, loading } = useAuth();
@@ -56,6 +57,7 @@ function Router() {
       <Route path="/invoices">{() => <ProtectedRoute component={Invoices} />}</Route>
       <Route path="/payments">{() => <ProtectedRoute component={Payments} />}</Route>
       <Route path="/caretakers">{() => <ProtectedRoute component={Caretakers} />}</Route>
+      <Route path="/reports">{() => <ProtectedRoute component={Reports} />}</Route>
       <Route path="/settings">{() => <ProtectedRoute component={Settings} />}</Route>
       <Route path="/">{() => <Redirect to="/dashboard" />}</Route>
       <Route>
