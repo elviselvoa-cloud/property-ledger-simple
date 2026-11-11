@@ -43,7 +43,6 @@ function Nav() {
   const links = [
     { label: "Features", href: "features" },
     { label: "How It Works", href: "how-it-works" },
-    { label: "Pricing", href: "pricing" },
     { label: "FAQs", href: "faqs" },
   ];
 
@@ -151,32 +150,24 @@ function Hero() {
           <span className="text-primary">built for Kenya</span>
         </h1>
         <p className="mt-6 text-lg text-muted-foreground max-w-2xl mx-auto leading-relaxed">
-          Track M-Pesa Paybill &amp; Till payments, send automated WhatsApp rent
-          receipts, manage arrears by aging bucket, and invoice roommates — all in
-          one dashboard.
+          Track payments, send automated receipts, manage arrears, and streamline your property business in one intuitive dashboard.
         </p>
         <div className="mt-10 flex flex-wrap justify-center gap-4">
           <Link href={user ? "/dashboard" : "/signup"}>
             <Button size="lg" className="gap-2">
-              Get Started Free
+              Get Started
               <ChevronDown className="size-4 rotate-[-90deg]" />
             </Button>
           </Link>
-          <button
-            onClick={() => scrollTo("pricing")}
-            className="inline-flex items-center gap-2 px-6 py-3 text-sm font-medium text-muted-foreground border border-border rounded-md hover:bg-accent transition-colors"
-          >
-            View Pricing
-          </button>
         </div>
 
         {/* Highlights */}
         <div className="mt-16 grid grid-cols-2 sm:grid-cols-4 gap-6 text-center">
           {[
-            { icon: Receipt, label: "M-Pesa Tracking" },
-            { icon: Smartphone, label: "WhatsApp Receipts" },
-            { icon: TrendingUp, label: "Arrears Aging" },
-            { icon: Split, label: "Roommate Invoicing" },
+            { icon: Receipt, label: "Payment Tracking" },
+            { icon: Smartphone, label: "Automated Receipts" },
+            { icon: TrendingUp, label: "Arrears Management" },
+            { icon: Split, label: "Invoicing" },
           ].map(({ icon: Icon, label }) => (
             <div key={label} className="flex flex-col items-center gap-2">
               <div className="p-3 rounded-full bg-accent">
