@@ -95,6 +95,7 @@ export default function Leases() {
   const [saving, setSaving] = useState(false);
   const [editing, setEditing] = useState<Lease | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm);
+  const [showLeased, setShowLeased] = useState(false);
 
   const load = useCallback(async () => {
     if (!landlordId) return;
@@ -145,17 +146,29 @@ export default function Leases() {
     return property ? `${property.name} · ${u.unit_number}` : u.unit_number;
   };
 
+  // Tenants already holding an active/pending lease as primary leaseholder
+  // (excluding the lease being edited). Hidden unless the landlord opts in.
+  const leasedTenantIds = new Set(
+    rows
+      .filter((l) => (l.status === "active" || l.status === "pending") && l.id !== editing?.id)
+      .map((l) => l.tenant_id)
+  );
+  const selectableTenants = tenants.filter(
+    (t) => showLeased || !leasedTenantIds.has(t.id) || String(t.id) === form.tenant_id
+  );
+
   const openCreate = () => {
     if (tenants.length === 0 || units.length === 0) {
       toast.error("Add at least one tenant and one unit first");
       return;
     }
     setEditing(null);
+    setShowLeased(false);
     const firstUnit = units.find((u) => u.status !== "occupied") ?? units[0];
     setForm({
       ...emptyForm,
       start_date: today(),
-      tenant_id: String(tenants[0].id),
+      tenant_id: String((tenants.find((t) => !leasedTenantIds.has(t.id)) ?? { id: "" }).id),
       unit_id: String(firstUnit.id),
       rent_amount: String(firstUnit.rent_amount ?? ""),
       deposit_amount: firstUnit.deposit_amount != null ? String(firstUnit.deposit_amount) : "",
@@ -205,6 +218,10 @@ export default function Leases() {
     if (!landlordId) return;
     if (!form.tenant_id || !form.unit_id || !form.start_date || !form.rent_amount) {
       toast.error("Tenant, unit, start date and rent are required");
+      return;
+    }
+    if (leasedTenantIds.has(Number(form.tenant_id)) && !showLeased) {
+      toast.error("This tenant already has an active lease. Tick 'Show already leased tenants' to allow it.");
       return;
     }
     const dueDay = Number(form.rent_due_day);
@@ -410,13 +427,27 @@ export default function Leases() {
                   <SelectValue placeholder="Select tenant" />
                 </SelectTrigger>
                 <SelectContent>
-                  {tenants.map((t) => (
+                  {selectableTenants.map((t) => (
                     <SelectItem key={t.id} value={String(t.id)}>
                       {t.first_name} {t.last_name}
+                      {leasedTenantIds.has(t.id) ? " (already leased)" : ""}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+              <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                <input
+                  type="checkbox"
+                  checked={showLeased}
+                  onChange={(e) => setShowLeased(e.target.checked)}
+                />
+                Show already leased tenants (special cases only)
+              </label>
+              {form.tenant_id && leasedTenantIds.has(Number(form.tenant_id)) && (
+                <p className="text-xs text-destructive">
+                  This tenant already has an active lease on another unit.
+                </p>
+              )}
             </div>
             <div className="grid gap-2">
               <Label>Unit</Label>
