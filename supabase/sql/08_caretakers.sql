@@ -1,12 +1,39 @@
 -- ============================================================
--- 08: Caretakers & property assignments
--- Run this AFTER 07_roommates.sql
+-- 08: Caretakers & property assignments (Self-contained)
 -- ============================================================
 
--- ─── Caretakers ───────────────────────────────────────────────
-CREATE TABLE caretakers (
+-- ─── 0. Ensure Landlord Helper Functions Exist ───────────────
+CREATE OR REPLACE FUNCTION public.get_user_id()
+RETURNS BIGINT
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT id FROM public.users WHERE auth_id = auth.uid() LIMIT 1;
+$$;
+
+CREATE OR REPLACE FUNCTION public.get_landlord_id()
+RETURNS BIGINT
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT l.id
+  FROM public.landlords l
+  JOIN public.users u ON u.id = l.user_id
+  WHERE u.auth_id = auth.uid()
+  LIMIT 1;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.get_user_id() TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.get_landlord_id() TO authenticated, service_role;
+
+-- ─── 1. Caretakers Table ──────────────────────────────────────
+CREATE TABLE IF NOT EXISTS public.caretakers (
   id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-  landlord_id BIGINT NOT NULL REFERENCES landlords(id) ON DELETE CASCADE,
+  landlord_id BIGINT NOT NULL REFERENCES public.landlords(id) ON DELETE CASCADE,
   name VARCHAR(255) NOT NULL,
   phone VARCHAR(30),
   email VARCHAR(320),
@@ -17,43 +44,49 @@ CREATE TABLE caretakers (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE INDEX caretakers_landlord_id_idx ON caretakers(landlord_id);
+CREATE INDEX IF NOT EXISTS caretakers_landlord_id_idx 
+  ON public.caretakers(landlord_id);
 
--- ─── Caretaker ↔ Property assignments ────────────────────────
-CREATE TABLE caretaker_properties (
+-- ─── 2. Caretaker ↔ Property Assignments Table ───────────────
+CREATE TABLE IF NOT EXISTS public.caretaker_properties (
   id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-  caretaker_id BIGINT NOT NULL REFERENCES caretakers(id) ON DELETE CASCADE,
-  property_id BIGINT NOT NULL REFERENCES properties(id) ON DELETE CASCADE,
-  landlord_id BIGINT NOT NULL REFERENCES landlords(id) ON DELETE CASCADE,
+  caretaker_id BIGINT NOT NULL REFERENCES public.caretakers(id) ON DELETE CASCADE,
+  property_id BIGINT NOT NULL REFERENCES public.properties(id) ON DELETE CASCADE,
+  landlord_id BIGINT NOT NULL REFERENCES public.landlords(id) ON DELETE CASCADE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   UNIQUE (caretaker_id, property_id)
 );
 
-CREATE INDEX caretaker_properties_caretaker_id_idx ON caretaker_properties(caretaker_id);
-CREATE INDEX caretaker_properties_property_id_idx ON caretaker_properties(property_id);
+CREATE INDEX IF NOT EXISTS caretaker_properties_caretaker_id_idx 
+  ON public.caretaker_properties(caretaker_id);
+CREATE INDEX IF NOT EXISTS caretaker_properties_property_id_idx 
+  ON public.caretaker_properties(property_id);
 
--- ─── Data API access (required) ──────────────────────────────
-GRANT SELECT, INSERT, UPDATE, DELETE ON caretakers TO authenticated;
-GRANT ALL ON caretakers TO service_role;
-GRANT SELECT, INSERT, UPDATE, DELETE ON caretaker_properties TO authenticated;
-GRANT ALL ON caretaker_properties TO service_role;
+-- ─── 3. Data API Grants (Required for PostgREST) ─────────────
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.caretakers TO authenticated;
+GRANT ALL ON public.caretakers TO service_role;
 
--- ─── Row Level Security ──────────────────────────────────────
-ALTER TABLE caretakers ENABLE ROW LEVEL SECURITY;
-ALTER TABLE caretaker_properties ENABLE ROW LEVEL SECURITY;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.caretaker_properties TO authenticated;
+GRANT ALL ON public.caretaker_properties TO service_role;
 
-CREATE POLICY "Caretakers: own landlord" ON caretakers
+-- ─── 4. Row Level Security Policies ──────────────────────────
+ALTER TABLE public.caretakers ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.caretaker_properties ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Caretakers: own landlord" ON public.caretakers;
+CREATE POLICY "Caretakers: own landlord" ON public.caretakers
   FOR ALL TO authenticated
-  USING (landlord_id = get_landlord_id())
-  WITH CHECK (landlord_id = get_landlord_id());
+  USING (landlord_id = public.get_landlord_id())
+  WITH CHECK (landlord_id = public.get_landlord_id());
 
-CREATE POLICY "Caretaker properties: own landlord" ON caretaker_properties
+DROP POLICY IF EXISTS "Caretaker properties: own landlord" ON public.caretaker_properties;
+CREATE POLICY "Caretaker properties: own landlord" ON public.caretaker_properties
   FOR ALL TO authenticated
-  USING (landlord_id = get_landlord_id())
-  WITH CHECK (landlord_id = get_landlord_id());
+  USING (landlord_id = public.get_landlord_id())
+  WITH CHECK (landlord_id = public.get_landlord_id());
 
--- ─── Keep updated_at fresh ───────────────────────────────────
-CREATE OR REPLACE FUNCTION set_updated_at()
+-- ─── 5. Auto-update updated_at Trigger ───────────────────────
+CREATE OR REPLACE FUNCTION public.set_updated_at()
 RETURNS TRIGGER
 LANGUAGE plpgsql
 AS $$
@@ -63,11 +96,7 @@ BEGIN
 END;
 $$;
 
-DROP TRIGGER IF EXISTS caretakers_set_updated_at ON caretakers;
+DROP TRIGGER IF EXISTS caretakers_set_updated_at ON public.caretakers;
 CREATE TRIGGER caretakers_set_updated_at
-  BEFORE UPDATE ON caretakers
-  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
-
--- NOTE: caretakers are managed by the landlord inside the app.
--- A dedicated caretaker login/portal will reuse these tables later
--- via a separate role mapping, never by storing roles on users.
+  BEFORE UPDATE ON public.caretakers
+  FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();

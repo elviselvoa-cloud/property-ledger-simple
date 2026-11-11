@@ -15,6 +15,9 @@ import Payments from "./pages/Payments";
 import Settings from "./pages/Settings";
 import Caretakers from "./pages/Caretakers";
 import Reports from "./pages/Reports";
+import Expenses from "./pages/Expenses";
+import Communications from "./pages/Communications";
+import Landing from "./pages/Landing";
 
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
   const { user, loading } = useAuth();
@@ -56,10 +59,12 @@ function Router() {
       <Route path="/leases">{() => <ProtectedRoute component={Leases} />}</Route>
       <Route path="/invoices">{() => <ProtectedRoute component={Invoices} />}</Route>
       <Route path="/payments">{() => <ProtectedRoute component={Payments} />}</Route>
+      <Route path="/expenses">{() => <ProtectedRoute component={Expenses} />}</Route>
+      <Route path="/communications">{() => <ProtectedRoute component={Communications} />}</Route>
       <Route path="/caretakers">{() => <ProtectedRoute component={Caretakers} />}</Route>
       <Route path="/reports">{() => <ProtectedRoute component={Reports} />}</Route>
       <Route path="/settings">{() => <ProtectedRoute component={Settings} />}</Route>
-      <Route path="/">{() => <Redirect to="/dashboard" />}</Route>
+      <Route path="/">{() => <Landing />}</Route>
       <Route>
         <div className="min-h-screen flex items-center justify-center">
           <h1 className="text-2xl font-semibold text-muted-foreground">Page not found</h1>

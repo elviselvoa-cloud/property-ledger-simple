@@ -165,3 +165,55 @@ export type Caretaker = {
   created_at: string;
   updated_at: string;
 };
+
+export type Expense = {
+  id: number;
+  landlord_id: number;
+  property_id: number | null;
+  category:
+    | "repairs_maintenance"
+    | "utilities_water"
+    | "utilities_electricity"
+    | "caretaker_salary"
+    | "garbage_collection"
+    | "security"
+    | "taxes_rates"
+    | "management_fee"
+    | "other";
+  amount: number;
+  expense_date: string;
+  payee: string | null;
+  payment_method: string;
+  reference_number: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type SmsMessageType =
+  | "rent_reminder"
+  | "payment_receipt"
+  | "estate_broadcast"
+  | "custom"
+  | "overdue_notice";
+
+export type SmsStatus = "pending" | "sent" | "delivered" | "failed";
+
+export type SmsLog = {
+  id: number;
+  landlord_id: number;
+  tenant_id: number | null;
+  property_id: number | null;
+  recipient_name: string;
+  recipient_phone: string;
+  message_type: SmsMessageType;
+  message_body: string;
+  segments_count: number;
+  status: SmsStatus;
+  provider_message_id: string | null;
+  cost_kes: number;
+  error_message: string | null;
+  sent_at: string | null;
+  created_at: string;
+  updated_at: string;
+};

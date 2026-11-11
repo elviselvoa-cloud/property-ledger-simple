@@ -3,6 +3,7 @@
 ## Done
 - [x] Step 1: Roommates / co-staying (07_roommates.sql, tenancy UI on Leases, split invoicing)
 - [x] Step 3: Caretakers page, protected route, sidebar navigation, and property assignment (08_caretakers.sql)
+- [x] Public SaaS Landing Page (`/`), with auth-aware nav, hero, features, how-it-works, pricing, FAQs, footer
 
 ## Next
 - [x] Step 2: Flexible bulk unit generator (rule builder + freeform paste)

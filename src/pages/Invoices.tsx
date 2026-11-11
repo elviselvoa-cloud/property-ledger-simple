@@ -19,6 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Table,
   TableBody,
@@ -27,20 +28,27 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Textarea } from "@/components/ui/textarea";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useLandlord } from "@/hooks/useLandlord";
+import { buildInvoiceNoticeData, printInvoice, shareInvoiceOnWhatsApp } from "@/lib/invoice-notice";
+import { participantShares } from "@/lib/roommates";
+import { Loader2, MessageCircle, Pencil, Plus, Printer, Receipt, Send, Sparkles, Trash2 } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
 import {
   supabase,
+  type Landlord,
   type Lease,
   type Property,
   type RentInvoice,
   type Tenant,
   type Unit,
 } from "@/integrations/supabase/client";
-import { participantShares } from "@/lib/roommates";
-import { Loader2, Pencil, Plus, Receipt, Sparkles, Trash2 } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
-import { toast } from "sonner";
 
 type FormState = {
   lease_id: string;
@@ -71,8 +79,10 @@ export default function Invoices() {
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [units, setUnits] = useState<Unit[]>([]);
   const [properties, setProperties] = useState<Property[]>([]);
+  const [landlord, setLandlord] = useState<Landlord | null>(null);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
+  const [sendingReminders, setSendingReminders] = useState(false);
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [editing, setEditing] = useState<RentInvoice | null>(null);
@@ -83,7 +93,7 @@ export default function Invoices() {
   const load = useCallback(async () => {
     if (!landlordId) return;
     setLoading(true);
-    const [invRes, leaseRes, tenantsRes, unitsRes, propsRes] = await Promise.all([
+    const [invRes, leaseRes, tenantsRes, unitsRes, propsRes, llRes] = await Promise.all([
       supabase
         .from("rent_invoices")
         .select("*")
@@ -100,6 +110,7 @@ export default function Invoices() {
         .select("id, unit_number, property_id")
         .eq("landlord_id", landlordId),
       supabase.from("properties").select("id, name").eq("landlord_id", landlordId),
+      supabase.from("landlords").select("*").eq("id", landlordId).single(),
     ]);
     if (invRes.error) toast.error(invRes.error.message);
     else setRows((invRes.data ?? []) as RentInvoice[]);
@@ -111,6 +122,8 @@ export default function Invoices() {
     else setUnits((unitsRes.data ?? []) as Unit[]);
     if (propsRes.error) toast.error(propsRes.error.message);
     else setProperties((propsRes.data ?? []) as Property[]);
+    if (llRes.error) console.warn("Failed to load landlord profile", llRes.error);
+    else setLandlord(llRes.data ?? null);
     setLoading(false);
   }, [landlordId]);
 
@@ -360,6 +373,71 @@ export default function Invoices() {
     }
   };
 
+  const getInvoiceNoticeData = (inv: RentInvoice) => {
+    const tenant = tenants.find((t) => t.id === inv.tenant_id);
+    const unit = units.find((u) => u.id === inv.unit_id);
+    const property = unit ? properties.find((p) => p.id === unit.property_id) : null;
+    return buildInvoiceNoticeData({ invoice: inv, landlord, tenant: tenant ?? null, unit: unit ?? null, property });
+  };
+
+  const handlePrintInvoice = (inv: RentInvoice) => {
+    const data = getInvoiceNoticeData(inv);
+    if (!printInvoice(data)) {
+      toast.error("Allow pop-ups for this site to print invoices");
+    }
+  };
+
+  const handleShareWhatsApp = (inv: RentInvoice) => {
+    const data = getInvoiceNoticeData(inv);
+    if (!shareInvoiceOnWhatsApp(data)) {
+      toast.error("Allow pop-ups for this site to open WhatsApp");
+    }
+  };
+
+  // Batch send reminders for all overdue/pending invoices for the current billing period
+  const sendReminders = async () => {
+    if (!landlordId || !landlord) return;
+    setSendingReminders(true);
+    const currentMonth = now.getMonth() + 1;
+    const currentYear = now.getFullYear();
+
+    // Fetch all pending/overdue invoices for current period
+    const { data: pendingInvoices, error } = await supabase
+      .from("rent_invoices")
+      .select("*")
+      .eq("landlord_id", landlordId)
+      .eq("period_month", currentMonth)
+      .eq("period_year", currentYear)
+      .in("status", ["pending", "overdue", "partial"]);
+
+    if (error) {
+      setSendingReminders(false);
+      toast.error(error.message);
+      return;
+    }
+
+    if (!pendingInvoices || pendingInvoices.length === 0) {
+      setSendingReminders(false);
+      toast.info("No pending or overdue invoices for this month");
+      return;
+    }
+
+    let sent = 0;
+    for (const inv of pendingInvoices) {
+      const tenant = tenants.find((t) => t.id === inv.tenant_id);
+      if (!tenant?.phone) continue;
+      const data = getInvoiceNoticeData(inv);
+      if (shareInvoiceOnWhatsApp(data)) sent++;
+    }
+
+    setSendingReminders(false);
+    if (sent > 0) {
+      toast.success(`Sent ${sent} reminder${sent > 1 ? "s" : ""} via WhatsApp`);
+    } else {
+      toast.warning("No tenants with phone numbers to send reminders to");
+    }
+  };
+
   const outstanding = rows
     .filter((r) => !["paid", "cancelled"].includes(r.status))
     .reduce((sum, r) => sum + balance(r), 0);
@@ -382,6 +460,18 @@ export default function Invoices() {
                 <Sparkles className="h-4 w-4 mr-1" />
               )}
               Generate this month
+            </Button>
+            <Button
+              variant="outline"
+              onClick={sendReminders}
+              disabled={sendingReminders || !landlordId}
+            >
+              {sendingReminders ? (
+                <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+              ) : (
+                <Send className="h-4 w-4 mr-1" />
+              )}
+              Send Reminders
             </Button>
             <Button onClick={openCreate} disabled={!landlordId}>
               <Plus className="h-4 w-4 mr-1" /> Add Invoice
@@ -459,6 +549,21 @@ export default function Invoices() {
                         </TableCell>
                         <TableCell>
                           <div className="flex justify-end gap-1">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon">
+                                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg>
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => handlePrintInvoice(inv)}>
+                                  <Printer className="h-4 w-4 mr-2" /> Print Invoice
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleShareWhatsApp(inv)}>
+                                  <MessageCircle className="h-4 w-4 mr-2" /> Send via WhatsApp
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                             <Button variant="ghost" size="icon" onClick={() => openEdit(inv)}>
                               <Pencil className="h-4 w-4" />
                             </Button>
