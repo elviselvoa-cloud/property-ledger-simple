@@ -9,6 +9,7 @@ import {
   Receipt,
   Wallet,
   Settings,
+  HardHat,
   LogOut,
   Menu,
   X,
@@ -27,6 +28,7 @@ const navItems = [
   { to: "/leases", label: "Leases", icon: FileText },
   { to: "/invoices", label: "Invoices", icon: Receipt },
   { to: "/payments", label: "Payments", icon: Wallet },
+  { to: "/caretakers", label: "Caretakers", icon: HardHat },
   { to: "/settings", label: "Settings", icon: Settings },
 ];
 
