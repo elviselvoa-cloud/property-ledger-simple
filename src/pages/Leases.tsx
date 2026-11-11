@@ -178,6 +178,7 @@ export default function Leases() {
 
   const openEdit = (l: Lease) => {
     setEditing(l);
+    setShowLeased(false);
     setForm({
       tenant_id: String(l.tenant_id),
       unit_id: String(l.unit_id),
