@@ -27,8 +27,10 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 
-const kes = (n: number) =>
-  `KES ${n.toLocaleString("en-KE", { maximumFractionDigits: 0 })}`;
+const kes = (n: number | null) => {
+  if (n == null || n === 0) return "Free";
+  return `KES ${n.toLocaleString("en-KE", { maximumFractionDigits: 0 })}`;
+};
 
 const scrollTo = (id: string) => {
   document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });

@@ -251,8 +251,15 @@ export default function Payments() {
     const paid = (payments ?? []).reduce((sum, p) => sum + Number(p.amount), 0);
     const inv = invoices.find((i) => i.id === invoiceId);
     if (!inv) return;
+    const isPastDue = new Date(inv.due_date) < new Date(new Date().toDateString());
     const status: RentInvoice["status"] =
-      paid <= 0 ? "pending" : paid >= Number(inv.amount) ? "paid" : "partial";
+      paid >= Number(inv.amount)
+        ? "paid"
+        : paid > 0
+        ? "partial"
+        : isPastDue
+        ? "overdue"
+        : "pending";
     await supabase
       .from("rent_invoices")
       .update({

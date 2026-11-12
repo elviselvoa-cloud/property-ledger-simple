@@ -23,7 +23,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import type { SmsLog, SmsMessageType, Property, Tenant, Landlord } from "@/integrations/supabase/client";
-import { sanitizeKenyanPhone, calculateSmsSegments, TEMPLATE_RENT_DUE, TEMPLATE_OVERDUE, TEMPLATE_ESTATE_BROADCAST } from "@/lib/sms";
+import { normalizePhone, calculateSmsSegments, TEMPLATE_RENT_DUE, TEMPLATE_OVERDUE, TEMPLATE_ESTATE_BROADCAST } from "@/lib/sms";
 
 const MESSAGE_TYPES: { value: SmsMessageType; label: string }[] = [
   { value: "rent_reminder", label: "Rent Due Reminder" },
@@ -101,8 +101,8 @@ export default function Communications() {
 
   const handlePreviewRecipients = () => {
     const recipients = getEligibleRecipients();
-    const valid = recipients.map((r) => ({ ...r, phone: sanitizeKenyanPhone(r.phone) ?? r.phone }))
-      .filter((r) => r.phone.startsWith("+"));
+    const valid = recipients.map((r) => ({ ...r, phone: normalizePhone(r.phone) ?? r.phone }))
+      .filter((r) => r.phone.startsWith("254"));
     setValidRecipients(valid);
   };
 
@@ -125,9 +125,15 @@ export default function Communications() {
     try {
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL ?? "";
       if (!supabaseUrl) { toast.error("Supabase URL not configured"); return; }
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) {
+        toast.error("Session expired. Please sign in again.");
+        return;
+      }
       const response = await fetch(`${supabaseUrl}/functions/v1/send-sms`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${localStorage.getItem("sb-token")}` },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ landlordId: landlord?.id, recipients: validRecipients, message: messageBody, messageType: templateType, smsUsername: (landlord as any)?.sms_username, smsApiKey: (landlord as any)?.sms_api_key, smsSenderId: (landlord as any)?.sms_sender_id }),
       });
       const result = await response.json();
@@ -145,9 +151,15 @@ export default function Communications() {
     setResendingLogId(log.id);
     try {
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL ?? "";
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) {
+        toast.error("Session expired. Please sign in again.");
+        return;
+      }
       const response = await fetch(`${supabaseUrl}/functions/v1/send-sms`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${localStorage.getItem("sb-token")}` },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ landlordId: log.landlord_id, recipients: [{ phone: log.recipient_phone, name: log.recipient_name, tenantId: log.tenant_id }], message: log.message_body, messageType: log.message_type }),
       });
       const result = await response.json();

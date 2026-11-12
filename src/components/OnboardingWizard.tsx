@@ -21,12 +21,12 @@ import {
   ChevronRight,
   Info,
   Loader2,
-  Plus,
+  Settings,
   UserPlus,
-  Users,
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 // ─── Types ──────────────────────────────────────────────────────
 
@@ -42,6 +42,8 @@ type Step2Form = {
   property_name: string;
   address: string;
   city: string;
+  default_rent: string;
+  default_deposit: string;
   unit_input: string;
   unit_mode: "rule" | "paste";
   rule_prefix: string;
@@ -51,16 +53,6 @@ type Step2Form = {
 };
 
 type Step3Form = {
-  first_name: string;
-  last_name: string;
-  phone: string;
-  national_id: string;
-  selected_unit_id: string;
-  rent_amount: string;
-  lease_start_date: string;
-};
-
-type Step4Form = {
   caretaker_name: string;
   caretaker_phone: string;
   selected_property_id: string;
@@ -72,9 +64,14 @@ type WizardState = {
   error: string | null;
 };
 
-// ─── Helpers ────────────────────────────────────────────────────
+interface OnboardingWizardProps {
+  landlordId: number;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onComplete: () => void;
+}
 
-const LANDLORD_FIELDS = ["business_name", "phone", "mpesa_paybill", "payment_instructions"] as const;
+// ─── Helpers ────────────────────────────────────────────────────
 
 async function refreshLandlord(landlordId: number): Promise<Landlord | null> {
   const { data, error } = await supabase
@@ -90,15 +87,16 @@ async function refreshLandlord(landlordId: number): Promise<Landlord | null> {
 
 export default function OnboardingWizard({
   landlordId,
+  open,
+  onOpenChange,
   onComplete,
-}: {
-  landlordId: number;
-  onComplete: () => void;
-}) {
+}: OnboardingWizardProps) {
   const [state, setState] = useState<WizardState>({ step: 0, saving: false, error: null });
   const [landlord, setLandlord] = useState<Landlord | null>(null);
   const [properties, setProperties] = useState<Property[]>([]);
   const [allUnits, setAllUnits] = useState<Unit[]>([]);
+  const [createdPropertyId, setCreatedPropertyId] = useState<number | null>(null);
+  const [createdPropertyName, setCreatedPropertyName] = useState<string>("");
 
   // Step 1
   const [s1, setS1] = useState<Step1Form>({
@@ -114,6 +112,8 @@ export default function OnboardingWizard({
     property_name: "",
     address: "",
     city: "",
+    default_rent: "15000",
+    default_deposit: "15000",
     unit_input: "A1",
     unit_mode: "rule",
     rule_prefix: "A",
@@ -122,33 +122,17 @@ export default function OnboardingWizard({
     generated_units: [],
   });
 
-  // Step 3
+  // Step 3 (Caretaker - optional)
   const [s3, setS3] = useState<Step3Form>({
-    first_name: "",
-    last_name: "",
-    phone: "",
-    national_id: "",
-    selected_unit_id: "",
-    rent_amount: "",
-    lease_start_date: new Date().toISOString().slice(0, 10),
-  });
-
-  // Step 4
-  const [s4, setS4] = useState<Step4Form>({
     caretaker_name: "",
     caretaker_phone: "",
     selected_property_id: "",
   });
 
   // Derived
-  const availableUnits = allUnits.filter((u) => u.status === "vacant");
-  const stepLabels = [
-    "Business profile",
-    "Property & units",
-    "First tenant",
-    "Caretaker",
-  ];
+  const stepLabels = ["Business profile", "Property & units", "Caretaker", "Ready!"];
   const hasCompleted = landlord?.onboarding_status === "completed";
+  const isLastStep = state.step === 3;
 
   // Load initial landlord data
   useEffect(() => {
@@ -160,15 +144,24 @@ export default function OnboardingWizard({
         .select("id, name")
         .eq("landlord_id", landlordId)
         .order("created_at", { ascending: true })
-        .then(({ data }) => setProperties((data ?? []) as Property[]));
+        .then(({ data }) => setProperties(data as Property[] ?? []));
       supabase
         .from("units")
         .select("id, unit_number, property_id, status")
         .eq("landlord_id", landlordId)
         .order("created_at", { ascending: true })
-        .then(({ data }) => setAllUnits((data ?? []) as Unit[]));
+        .then(({ data }) => setAllUnits(data as Unit[] ?? []));
     }
   }, [landlordId, hasCompleted]);
+
+  // Reset wizard state when modal opens/closes
+  useEffect(() => {
+    if (open && !hasCompleted) {
+      setState({ step: 0, saving: false, error: null });
+      setCreatedPropertyId(null);
+      setCreatedPropertyName("");
+    }
+  }, [open, hasCompleted]);
 
   const setLoading = (saving: boolean) =>
     setState((prev) => ({ ...prev, saving, error: null }));
@@ -200,9 +193,9 @@ export default function OnboardingWizard({
       case 1:
         return s2.property_name.trim().length > 0 && s2.generated_units.length > 0;
       case 2:
-        return s3.first_name.trim().length > 0 && s3.selected_unit_id !== "";
+        return true; // caretaker is optional
       case 3:
-        return true;
+        return true; // celebration step
       default:
         return false;
     }
@@ -243,6 +236,8 @@ export default function OnboardingWizard({
             .single();
           if (propRes.error) throw propRes.error;
           const propertyId = propRes.data!.id as number;
+          setCreatedPropertyId(propertyId);
+          setCreatedPropertyName(s2.property_name.trim());
           if (s2.generated_units.length > 0) {
             const unitInserts = s2.generated_units.map((u) => ({
               landlord_id: landlordId,
@@ -251,15 +246,15 @@ export default function OnboardingWizard({
               floor: u.floor,
               bedrooms: 1,
               bathrooms: 1,
-              rent_amount: 10000,
-              deposit_amount: 20000,
+              rent_amount: Number(s2.default_rent) || 10000,
+              deposit_amount: Number(s2.default_deposit) || 10000,
               status: "vacant" as const,
               is_active: true,
             }));
             const { error: unitErr } = await supabase.from("units").insert(unitInserts);
             if (unitErr) throw unitErr;
           }
-          // Refresh units list for step 3
+          // Refresh units list for caretaker assignment
           const { data } = await supabase
             .from("units")
             .select("id, unit_number, property_id, status")
@@ -269,77 +264,46 @@ export default function OnboardingWizard({
           break;
         }
         case 2: {
-          // Insert tenant
-          const tenantRes = await supabase
-            .from("tenants")
-            .insert({
-              landlord_id: landlordId,
-              first_name: s3.first_name.trim(),
-              last_name: s3.last_name.trim(),
-              phone: s3.phone.trim() || null,
-              national_id: s3.national_id.trim() || null,
-              is_active: true,
-            })
-            .select("id")
-            .single();
-          if (tenantRes.error) throw tenantRes.error;
-          const tenantId = tenantRes.data!.id as number;
-          const unitId = Number(s3.selected_unit_id);
-          const startDate = s3.lease_start_date || new Date().toISOString().slice(0, 10);
-          const leaseRes = await supabase
-            .from("leases")
-            .insert({
-              landlord_id: landlordId,
-              tenant_id: tenantId,
-              unit_id: unitId,
-              rent_amount: Number(s3.rent_amount) || 10000,
-              rent_due_day: Number(s1.rent_due_day) || 1,
-              start_date: startDate,
-              end_date: null,
-              status: "active" as const,
-              is_roommate: false,
-              billing_mode: "separate" as const,
-            })
-            .select("id")
-            .single();
-          if (leaseRes.error) throw leaseRes.error;
-          // Mark unit occupied
-          const { error: unitUpdateErr } = await supabase
-            .from("units")
-            .update({ status: "occupied" })
-            .eq("id", unitId);
-          if (unitUpdateErr) throw unitUpdateErr;
-          break;
-        }
-        case 3: {
-          if (s4.caretaker_name.trim()) {
+          // Caretaker assignment (optional)
+          if (s3.caretaker_name.trim()) {
             const caretakerRes = await supabase
               .from("caretakers")
               .insert({
                 landlord_id: landlordId,
-                name: s4.caretaker_name.trim(),
-                phone: s4.caretaker_phone.trim() || null,
+                name: s3.caretaker_name.trim(),
+                phone: s3.caretaker_phone.trim() || null,
                 is_active: true,
               })
               .select("id")
               .single();
             if (caretakerRes.error) throw caretakerRes.error;
-            // TODO: assign caretaker to property via junction table if it exists
+            const caretakerId = caretakerRes.data!.id as number;
+            if (s3.selected_property_id) {
+              const { error: linkErr } = await supabase.from("caretaker_properties").insert({
+                caretaker_id: caretakerId,
+                property_id: Number(s3.selected_property_id),
+                landlord_id: landlordId,
+              });
+              if (linkErr) throw linkErr;
+            }
           }
           break;
         }
       }
 
-      const { error: doneErr } = await supabase
-        .from("landlords")
-        .update({ onboarding_status: "completed" })
-        .eq("id", landlordId);
-      if (doneErr) throw doneErr;
+      // Only mark complete on the celebration step (step 3)
+      if (state.step === 3) {
+        const { error: doneErr } = await supabase
+          .from("landlords")
+          .update({ onboarding_status: "completed" })
+          .eq("id", landlordId);
+        if (doneErr) throw doneErr;
 
-      const refreshed = await refreshLandlord(landlordId);
-      setLandlord(refreshed);
-      toast.success("Setup complete!");
-      onComplete();
+        const refreshed = await refreshLandlord(landlordId);
+        setLandlord(refreshed);
+        toast.success("Setup complete!");
+        onComplete();
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
       toast.error(err instanceof Error ? err.message : "Something went wrong");
@@ -360,7 +324,7 @@ export default function OnboardingWizard({
     setState((prev) => ({ ...prev, step: Math.max(0, prev.step - 1), error: null }));
   };
 
-  const markSkip = async (stepIndex: number) => {
+  const markSkip = async () => {
     setLoading(true);
     try {
       const { error } = await supabase
@@ -382,30 +346,26 @@ export default function OnboardingWizard({
   if (hasCompleted) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <div className="w-full max-w-xl bg-card rounded-xl shadow-lg border border-border flex flex-col max-h-[90vh]">
-        {/* Header */}
-        <div className="px-6 py-5 border-b border-border flex items-center justify-between">
-          <div>
-            <h2 className="text-lg font-semibold">Welcome to Property Ledger</h2>
-            <p className="text-sm text-muted-foreground mt-0.5">
-              Complete your setup in {Math.min(4, 4 - state.step)} simple step{Math.min(4, 4 - state.step) > 1 ? "s" : ""}
-            </p>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-xl max-h-[90vh]">
+        <DialogHeader>
+          <DialogTitle>Welcome to Property Ledger</DialogTitle>
+        </DialogHeader>
+        <div className="flex-1 overflow-y-auto space-y-5 pt-4">
+          {/* Progress indicator */}
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex gap-1">
+              {stepLabels.map((_, i) => (
+                <div
+                  key={i}
+                  className={`h-2 w-8 rounded-full transition-colors ${
+                    i < state.step ? "bg-primary" : i === state.step ? "bg-primary/60" : "bg-muted"
+                  }`}
+                />
+              ))}
+            </div>
           </div>
-          <div className="flex gap-1">
-            {stepLabels.map((_, i) => (
-              <div
-                key={i}
-                className={`h-2 w-8 rounded-full transition-colors ${
-                  i < state.step ? "bg-primary" : i === state.step ? "bg-primary/60" : "bg-muted"
-                }`}
-              />
-            ))}
-          </div>
-        </div>
 
-        {/* Body */}
-        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
           {state.error && (
             <Alert variant="destructive">
               <Info className="h-4 w-4" />
@@ -414,7 +374,7 @@ export default function OnboardingWizard({
             </Alert>
           )}
 
-          {/* Step 0: Business Profile */}
+          {/* Step 0: Business Profile & Payment Instructions */}
           {state.step === 0 && (
             <div className="space-y-4">
               <div className="grid gap-2">
@@ -475,7 +435,7 @@ export default function OnboardingWizard({
             </div>
           )}
 
-          {/* Step 1: Property & Units */}
+          {/* Step 1: Property & Units Setup */}
           {state.step === 1 && (
             <div className="space-y-4">
               <div className="grid gap-2">
@@ -504,6 +464,31 @@ export default function OnboardingWizard({
                     value={s2.city}
                     onChange={(e) => setS2({ ...s2, city: e.target.value })}
                     placeholder="e.g. Nairobi"
+                  />
+                </div>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="grid gap-2">
+                  <Label htmlFor="ob-rent">Default monthly rent (KES)</Label>
+                  <Input
+                    id="ob-rent"
+                    type="number"
+                    min={0}
+                    value={s2.default_rent}
+                    onChange={(e) => setS2({ ...s2, default_rent: e.target.value })}
+                    placeholder="e.g. 15000"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="ob-deposit">Default deposit (KES)</Label>
+                  <Input
+                    id="ob-deposit"
+                    type="number"
+                    min={0}
+                    value={s2.default_deposit}
+                    onChange={(e) => setS2({ ...s2, default_deposit: e.target.value })}
+                    placeholder="e.g. 15000"
                   />
                 </div>
               </div>
@@ -589,105 +574,8 @@ export default function OnboardingWizard({
             </div>
           )}
 
-          {/* Step 2: First Tenant (Optional) */}
+          {/* Step 2: Caretaker Assignment (Optional) */}
           {state.step === 2 && (
-            <div className="space-y-4">
-              <p className="text-sm text-muted-foreground">
-                Add your first tenant and assign them to one of the units above. This step is optional —
-                you can skip and add tenants from the Tenants page later.
-              </p>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="grid gap-2">
-                  <Label htmlFor="ob-tenant-first">First name *</Label>
-                  <Input
-                    id="ob-tenant-first"
-                    value={s3.first_name}
-                    onChange={(e) => setS3({ ...s3, first_name: e.target.value })}
-                    placeholder="Jane"
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="ob-tenant-last">Last name</Label>
-                  <Input
-                    id="ob-tenant-last"
-                    value={s3.last_name}
-                    onChange={(e) => setS3({ ...s3, last_name: e.target.value })}
-                    placeholder="Wanjiku"
-                  />
-                </div>
-              </div>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="grid gap-2">
-                  <Label htmlFor="ob-tenant-phone">Phone</Label>
-                  <Input
-                    id="ob-tenant-phone"
-                    value={s3.phone}
-                    onChange={(e) => setS3({ ...s3, phone: e.target.value })}
-                    placeholder="+254 7XX XXX XXX"
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="ob-nid">National ID</Label>
-                  <Input
-                    id="ob-nid"
-                    value={s3.national_id}
-                    onChange={(e) => setS3({ ...s3, national_id: e.target.value })}
-                    placeholder="e.g. 12345678"
-                  />
-                </div>
-              </div>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="grid gap-2">
-                  <Label htmlFor="ob-unit-select">Assign unit *</Label>
-                  <Select
-                    value={s3.selected_unit_id}
-                    onValueChange={(v) => setS3({ ...s3, selected_unit_id: v })}
-                  >
-                    <SelectTrigger id="ob-unit-select">
-                      <SelectValue placeholder="Select a vacant unit" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {availableUnits.length === 0 ? (
-                        <SelectItem value="-1" disabled>No vacant units yet</SelectItem>
-                      ) : (
-                        availableUnits.map((u) => {
-                          const prop = properties.find((p) => p.id === u.property_id);
-                          return (
-                            <SelectItem key={u.id} value={String(u.id)}>
-                              {prop ? `${prop.name} · ` : ""}{u.unit_number}
-                            </SelectItem>
-                          );
-                        })
-                      )}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="ob-rent">Monthly rent (KES)</Label>
-                  <Input
-                    id="ob-rent"
-                    type="number"
-                    min={0}
-                    value={s3.rent_amount}
-                    onChange={(e) => setS3({ ...s3, rent_amount: e.target.value })}
-                    placeholder="e.g. 25000"
-                  />
-                </div>
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="ob-start-date">Lease start date</Label>
-                <Input
-                  id="ob-start-date"
-                  type="date"
-                  value={s3.lease_start_date}
-                  onChange={(e) => setS3({ ...s3, lease_start_date: e.target.value })}
-                />
-              </div>
-            </div>
-          )}
-
-          {/* Step 3: Caretaker (Optional) */}
-          {state.step === 3 && (
             <div className="space-y-4">
               <p className="text-sm text-muted-foreground">
                 Optionally register a caretaker to help manage your property. You can always add caretakers
@@ -697,8 +585,8 @@ export default function OnboardingWizard({
                 <Label htmlFor="ob-caretaker-name">Caretaker name</Label>
                 <Input
                   id="ob-caretaker-name"
-                  value={s4.caretaker_name}
-                  onChange={(e) => setS4({ ...s4, caretaker_name: e.target.value })}
+                  value={s3.caretaker_name}
+                  onChange={(e) => setS3({ ...s3, caretaker_name: e.target.value })}
                   placeholder="e.g. James Ochieng"
                 />
               </div>
@@ -706,23 +594,23 @@ export default function OnboardingWizard({
                 <Label htmlFor="ob-caretaker-phone">Phone</Label>
                 <Input
                   id="ob-caretaker-phone"
-                  value={s4.caretaker_phone}
-                  onChange={(e) => setS4({ ...s4, caretaker_phone: e.target.value })}
+                  value={s3.caretaker_phone}
+                  onChange={(e) => setS3({ ...s3, caretaker_phone: e.target.value })}
                   placeholder="+254 7XX XXX XXX"
                 />
               </div>
-              {properties.length > 0 && (
+              {(properties.length > 0 || createdPropertyId) && (
                 <div className="grid gap-2">
                   <Label htmlFor="ob-caretaker-prop">Assign to property</Label>
                   <Select
-                    value={s4.selected_property_id}
-                    onValueChange={(v) => setS4({ ...s4, selected_property_id: v })}
+                    value={s3.selected_property_id}
+                    onValueChange={(v) => setS3({ ...s3, selected_property_id: v })}
                   >
                     <SelectTrigger id="ob-caretaker-prop">
                       <SelectValue placeholder="Select property" />
                     </SelectTrigger>
                     <SelectContent>
-                      {properties.map((p) => (
+                      {[...properties, ...(createdPropertyId ? [{ id: createdPropertyId, name: createdPropertyName }] : [])].map((p) => (
                         <SelectItem key={p.id} value={String(p.id)}>
                           {p.name}
                         </SelectItem>
@@ -733,40 +621,84 @@ export default function OnboardingWizard({
               )}
             </div>
           )}
+
+          {/* Step 3: Celebration & Completion Summary */}
+          {state.step === 3 && (
+            <div className="space-y-6">
+              <div className="flex flex-col items-center gap-3 py-4">
+                <div className="h-16 w-16 rounded-full bg-green-100 flex items-center justify-center">
+                  <CheckCircle2 className="h-8 w-8 text-green-600" />
+                </div>
+                <div className="text-center">
+                  <h3 className="text-lg font-semibold">You're all set up!</h3>
+                  <p className="text-sm text-muted-foreground">Your property ledger is ready to use.</p>
+                </div>
+              </div>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">Setup Summary</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Property:</span>
+                    <span className="font-medium">{createdPropertyName || "—"} ({allUnits.length} units created)</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Rent Due Day:</span>
+                    <span className="font-medium">{s1.rent_due_day}{s1.rent_due_day === "1" ? "st" : s1.rent_due_day === "2" ? "nd" : s1.rent_due_day === "3" ? "rd" : "th"} of every month</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Payment Info:</span>
+                    <span className="font-medium text-right max-w-[60%] truncate">
+                      {s1.mpesa_paybill || s1.payment_instructions || "Not configured"}
+                    </span>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <div className="rounded-md bg-blue-50 border border-blue-200 p-4">
+                <p className="text-sm text-blue-800">
+                  Your property and units are ready. When you&apos;re ready to onboard your tenants, navigate to{" "}
+                  <strong>Leases</strong> or <strong>Tenants</strong> to add them and assign units.
+                </p>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-border flex items-center justify-between gap-3">
+        <div className="px-0 py-4 border-t border-border flex items-center justify-between gap-3">
           <div className="flex gap-2">
-            {state.step > 0 && (
-              <Button variant="outline" onClick={goBack} disabled={state.saving}>
-                <ChevronLeft className="h-4 w-4 mr-1" /> Back
-              </Button>
-            )}
             {state.step > 0 && state.step < 3 && (
-              <Button variant="ghost" size="sm" onClick={() => markSkip(state.step + 1)} disabled={state.saving}>
-                Skip ahead
+              <>
+                <Button variant="outline" onClick={goBack} disabled={state.saving}>
+                  <ChevronLeft className="h-4 w-4 mr-1" /> Back
+                </Button>
+                <Button variant="ghost" size="sm" onClick={markSkip} disabled={state.saving}>
+                  Skip setup
+                </Button>
+              </>
+            )}
+            {state.step === 3 && (
+              <Button variant="ghost" size="sm" onClick={() => onOpenChange(false)} disabled={state.saving}>
+                Back
               </Button>
             )}
           </div>
           <div className="flex gap-2">
             {state.step < 3 ? (
-              <>
-                <Button variant="ghost" size="sm" onClick={() => markSkip(state.step + 1)} disabled={state.saving}>
-                  Skip rest
-                </Button>
-                <Button onClick={goNext} disabled={!canProceed() || state.saving}>
-                  {state.saving ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-1 animate-spin" /> Saving…
-                    </>
-                  ) : (
-                    <>
-                      Next <ChevronRight className="h-4 w-4 ml-1" />
-                    </>
-                  )}
-                </Button>
-              </>
+              <Button onClick={goNext} disabled={!canProceed() || state.saving}>
+                {state.saving ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-1 animate-spin" /> Saving…
+                  </>
+                ) : (
+                  <>
+                    Next <ChevronRight className="h-4 w-4 ml-1" />
+                  </>
+                )}
+              </Button>
             ) : (
               <Button onClick={goNext} disabled={!canProceed() || state.saving}>
                 {state.saving ? (
@@ -775,14 +707,14 @@ export default function OnboardingWizard({
                   </>
                 ) : (
                   <>
-                    <CheckCircle2 className="h-4 w-4 mr-1" /> Complete setup
+                    Go to Dashboard <ChevronRight className="h-4 w-4 ml-1" />
                   </>
                 )}
               </Button>
             )}
           </div>
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

@@ -38,45 +38,9 @@ export const SMS_TEMPLATES: Record<string, string> = {
 
 // ─── Phone Formatting ──────────────────────────────────────────
 
+export { normalizePhone, sanitizeKenyanPhone } from "./phone";
+
 const MOBILE_PREFIXES = new Set(["7", "1"]); // Kenya mobile prefixes (Safaricom/Airtel)
-
-/**
- * Normalises a Kenyan phone number to E.164 format (+254…).
- * Rejects landlines (02…) and numbers that don't match mobile patterns.
- */
-export function sanitizeKenyanPhone(phone: string): string | null {
-  if (!phone || typeof phone !== "string") return null;
-
-  const digits = phone.replace(/\D/g, "");
-  // Kenyan mobile: 9–10 digits locally (07XX/01XX XXX XXX), 12 with country code (+254)
-  if (!digits || digits.length < 9 || digits.length > 12) return null;
-
-  let e164: string;
-  if (digits.startsWith("0")) {
-    // Local format: strip leading 0, prepend +254
-    // After stripping 0, must be 9 digits → total with +254 = 12
-    if (digits.length !== 10) return null;
-    e164 = "+254" + digits.slice(1);
-  } else if (digits.startsWith("254")) {
-    // Already E.164 without leading +
-    if (digits.length !== 12) return null;
-    e164 = "+" + digits;
-  } else if (digits.startsWith("+254")) {
-    if (digits.length !== 13) return null;
-    e164 = digits;
-  } else if (digits.startsWith("7") || digits.startsWith("1")) {
-    // Bare mobile: 9 or 10 digits accepted (Kenyan mobile without leading zero)
-    e164 = "+254" + digits;
-  } else {
-    // Landline or other prefix
-    return null;
-  }
-
-  // Validate mobile prefix after adding country code (+254X…)
-  if (!MOBILE_PREFIXES.has(e164.charAt(4))) return null;
-
-  return e164;
-}
 
 // ─── Segment Calculation ───────────────────────────────────────
 

@@ -2,6 +2,16 @@ import DashboardLayout from "@/components/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -59,6 +69,7 @@ export default function Properties() {
   const [saving, setSaving] = useState(false);
   const [editing, setEditing] = useState<Property | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm);
+  const [propertyToDelete, setPropertyToDelete] = useState<Property | null>(null);
 
   const load = useCallback(async () => {
     if (!landlordId) return;
@@ -126,13 +137,50 @@ export default function Properties() {
   };
 
   const remove = async (p: Property) => {
-    if (!confirm(`Delete "${p.name}"? This also removes its units.`)) return;
-    const { error } = await supabase.from("properties").delete().eq("id", p.id);
-    if (error) toast.error(error.message);
-    else {
+    // Check for units
+    const { data: units } = await supabase
+      .from("units")
+      .select("id, unit_number, status")
+      .eq("property_id", p.id);
+    if (!units || units.length === 0) {
+      setPropertyToDelete(p);
+      return;
+    }
+    // Check for active leases or financial records on those units
+    const unitIds = units.map((u) => u.id);
+    const { data: leases } = await supabase
+      .from("leases")
+      .select("id, status")
+      .in("unit_id", unitIds);
+    const { data: invoices } = await supabase
+      .from("rent_invoices")
+      .select("id")
+      .in("unit_id", unitIds);
+    const { data: expenses } = await supabase
+      .from("expenses")
+      .select("id")
+      .in("unit_id", unitIds);
+    const hasActiveLeases = (leases ?? []).some((l) => l.status === "active" || l.status === "pending");
+    const hasFinancial = (invoices ?? []).length > 0 || (expenses ?? []).length > 0;
+    if (hasActiveLeases || hasFinancial) {
+      toast.error(
+        `Cannot delete "${p.name}". This property has ${units.length} unit(s) with active leases or transaction history. Please terminate active leases and reassign or archive units first.`
+      );
+      return;
+    }
+    setPropertyToDelete(p);
+  };
+
+  const confirmDelete = async () => {
+    if (!propertyToDelete) return;
+    const { error } = await supabase.from("properties").delete().eq("id", propertyToDelete.id);
+    if (error) {
+      toast.error(error.message);
+    } else {
       toast.success("Property deleted");
       load();
     }
+    setPropertyToDelete(null);
   };
 
   return (
@@ -301,6 +349,21 @@ export default function Properties() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={propertyToDelete !== null} onOpenChange={(open) => setPropertyToDelete(open ? propertyToDelete : null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirm deletion</AlertDialogTitle>
+            <AlertDialogDescription>
+              Delete "{propertyToDelete?.name}" and all its vacant units? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelete}>Delete</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </DashboardLayout>
   );
 }

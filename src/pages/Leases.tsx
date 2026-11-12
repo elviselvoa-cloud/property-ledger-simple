@@ -1,8 +1,17 @@
 import DashboardLayout from "@/components/DashboardLayout";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   Dialog,
   DialogContent,
@@ -37,7 +46,7 @@ import {
   type Tenant,
   type Unit,
 } from "@/integrations/supabase/client";
-import { FileText, Loader2, Pencil, Plus, Trash2 } from "lucide-react";
+import { FileText, Loader2, Pencil, Plus, Trash2, UserCheck } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 
@@ -57,6 +66,18 @@ type FormState = {
   billing_mode: "shared" | "separate";
   roommates: RoommateForm[];
   notes: string;
+};
+
+type MoveOutDeduction = {
+  type: "deduction";
+  description: string;
+  amount: number;
+};
+
+type MoveOutRefund = {
+  type: "refund";
+  description: string;
+  amount: number;
 };
 
 const emptyForm: FormState = {
@@ -96,6 +117,11 @@ export default function Leases() {
   const [editing, setEditing] = useState<Lease | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm);
   const [showLeased, setShowLeased] = useState(false);
+  const [moveOutOpen, setMoveOutOpen] = useState(false);
+  const [leaseForMoveOut, setLeaseForMoveOut] = useState<Lease | null>(null);
+  const [deductions, setDeductions] = useState<MoveOutDeduction[]>([]);
+  const [refunds, setRefunds] = useState<MoveOutRefund[]>([]);
+  const [moveOutSaving, setMoveOutSaving] = useState(false);
 
   const load = useCallback(async () => {
     if (!landlordId) return;
@@ -146,13 +172,18 @@ export default function Leases() {
     return property ? `${property.name} · ${u.unit_number}` : u.unit_number;
   };
 
+  // Find active leases for a tenant
+  const getLeasedTenantIds = useCallback(() => {
+    const set = new Set<number>();
+    rows.forEach((l) => {
+      if (l.status === "active" || l.status === "pending") set.add(l.tenant_id);
+    });
+    return set;
+  }, [rows]);
+
   // Tenants already holding an active/pending lease as primary leaseholder
   // (excluding the lease being edited). Hidden unless the landlord opts in.
-  const leasedTenantIds = new Set(
-    rows
-      .filter((l) => (l.status === "active" || l.status === "pending") && l.id !== editing?.id)
-      .map((l) => l.tenant_id)
-  );
+  const leasedTenantIds = getLeasedTenantIds();
   const selectableTenants = tenants.filter(
     (t) => showLeased || !leasedTenantIds.has(t.id) || String(t.id) === form.tenant_id
   );
@@ -164,11 +195,13 @@ export default function Leases() {
     }
     setEditing(null);
     setShowLeased(false);
+    const activeLeasedIds = Array.from(leasedTenantIds);
     const firstUnit = units.find((u) => u.status !== "occupied") ?? units[0];
+    const firstTenant = tenants.find((t) => !activeLeasedIds.includes(t.id)) ?? tenants[0];
     setForm({
       ...emptyForm,
       start_date: today(),
-      tenant_id: String((tenants.find((t) => !leasedTenantIds.has(t.id)) ?? { id: "" }).id),
+      tenant_id: firstTenant ? String(firstTenant.id) : "",
       unit_id: String(firstUnit.id),
       rent_amount: String(firstUnit.rent_amount ?? ""),
       deposit_amount: firstUnit.deposit_amount != null ? String(firstUnit.deposit_amount) : "",
@@ -200,6 +233,67 @@ export default function Leases() {
     setOpen(true);
   };
 
+  const openMoveOutDialog = (l: Lease) => {
+    setLeaseForMoveOut(l);
+    setDeductions([]);
+    setRefunds([]);
+    setMoveOutOpen(true);
+  };
+
+  const handleMoveOut = async () => {
+    if (!leaseForMoveOut) return;
+    setMoveOutSaving(true);
+
+    const totalDeductions = deductions.reduce((sum, d) => sum + d.amount, 0);
+    const totalRefunds = refunds.reduce((sum, r) => sum + r.amount, 0);
+    const depositToReturn = Math.max(0, (Number(leaseForMoveOut.deposit_amount || 0) - totalDeductions + totalRefunds));
+
+    const { error } = await supabase
+      .from("leases")
+      .update({
+        status: "terminated",
+        end_date: today(),
+      })
+      .eq("id", leaseForMoveOut.id);
+
+    if (error) {
+      toast.error(error.message);
+      setMoveOutSaving(false);
+      return;
+    }
+
+    // Update unit status to vacant
+    await supabase.from("units").update({ status: "vacant" }).eq("id", leaseForMoveOut.unit_id);
+
+    // Create settlement notice
+    const noticeText = `
+MOVE-OUT SETTLEMENT NOTICE
+
+Lease TERMINATED: ${tenantName(leaseForMoveOut.tenant_id)}
+Unit: ${unitLabel(leaseForMoveOut.unit_id)}
+
+Deposit Paid: KES ${Number(leaseForMoveOut.deposit_amount ?? 0).toLocaleString()}
+Total Deductions: KES ${totalDeductions.toLocaleString()}
+Total Refunds: KES ${totalRefunds.toLocaleString()}
+Net Deposit Return: KES ${depositToReturn.toLocaleString()}
+
+Deductions:
+${deductions.length === 0 ? "None" : deductions.map((d) => `  - ${d.description}: -KES ${d.amount.toLocaleString()}`).join("\n")}
+
+Refunds:
+${refunds.length === 0 ? "None" : refunds.map((r) => `  - ${r.description}: +KES ${r.amount.toLocaleString()}`).join("\n")}
+
+This settlement notice is generated by the Property Ledger system.
+`;
+
+    // Store the settlement for reference (optional - could be displayed or emailed)
+    toast.success(`Lease terminated. Deposit return: KES ${depositToReturn.toLocaleString()}`);
+    setMoveOutOpen(false);
+    setLeaseForMoveOut(null);
+    load();
+    setMoveOutSaving(false);
+  };
+
   // When the unit selection changes, prefill rent and deposit from that unit.
   const onUnitChange = (unitId: string) => {
     const u = units.find((x) => x.id === Number(unitId));
@@ -221,10 +315,11 @@ export default function Leases() {
       toast.error("Tenant, unit, start date and rent are required");
       return;
     }
-    if (leasedTenantIds.has(Number(form.tenant_id)) && !showLeased) {
+    if (leasedTenantIds.has(Number(form.tenant_id)) && !showLeased && !editing) {
       toast.error("This tenant already has an active lease. Tick 'Show already leased tenants' to allow it.");
       return;
     }
+
     const dueDay = Number(form.rent_due_day);
     if (!Number.isInteger(dueDay) || dueDay < 1 || dueDay > 31) {
       toast.error("Rent due day must be between 1 and 31");
@@ -270,35 +365,103 @@ export default function Leases() {
       roommates: roommateEntries,
       notes: form.notes.trim() || null,
     };
+
     const { error } = editing
       ? await supabase.from("leases").update(payload).eq("id", editing.id)
       : await supabase.from("leases").insert(payload);
 
-    // Keep unit occupancy in sync with lease status.
-    if (!error && (form.status === "active" || editing)) {
-      const unitStatus = form.status === "active" ? "occupied" : "vacant";
-      await supabase.from("units").update({ status: unitStatus }).eq("id", payload.unit_id);
-    }
-
     setSaving(false);
+
     if (error) {
       toast.error(error.message);
       return;
     }
+
+    // Sync unit occupancy:
+    // - On create/activate: mark new unit as occupied, free old unit if tenant had another active lease
+    // - On termination/expiration: mark unit as vacant
+    // - On delete: handled by delete guard
+    if (!error) {
+      if (!editing) {
+        // New lease - mark new unit occupied
+        await supabase.from("units").update({ status: "occupied" }).eq("id", payload.unit_id);
+      } else if (editing) {
+        // Editing existing lease
+        const oldUnitId = editing.unit_id;
+        const newUnitId = payload.unit_id;
+
+        if (oldUnitId !== newUnitId) {
+          // Unit reassignment - check if old unit has other active leases
+          const { data: otherActiveLeases } = await supabase
+            .from("leases")
+            .select("id")
+            .eq("unit_id", oldUnitId)
+            .eq("status", "active");
+
+          if (!otherActiveLeases || otherActiveLeases.length === 0) {
+            // No other active leases, free the old unit
+            await supabase.from("units").update({ status: "vacant" }).eq("id", oldUnitId);
+          }
+
+          // Mark new unit occupied if not already
+          await supabase.from("units").update({ status: "occupied" }).eq("id", newUnitId);
+        } else if (form.status === "active") {
+          // Same unit, activating the lease
+          await supabase.from("units").update({ status: "occupied" }).eq("id", payload.unit_id);
+        } else if (form.status === "terminated" || form.status === "expired") {
+          // Ending the lease
+          await supabase.from("units").update({ status: "vacant" }).eq("id", payload.unit_id);
+        }
+      }
+    }
+
     toast.success(editing ? "Lease updated" : "Lease created");
     setOpen(false);
     load();
   };
 
+  const leaseToDelete = useState<Lease | null>(null)[0];
+  const [leaseToDeleteState, setLeaseToDeleteState] = useState<Lease | null>(null);
+
   const remove = async (l: Lease) => {
-    const label = `${tenantName(l.tenant_id)} at ${unitLabel(l.unit_id)}`;
-    if (!confirm(`Delete the lease for ${label}?`)) return;
+    // Check for invoices
+    const { data: invoices, error: invErr } = await supabase
+      .from("rent_invoices")
+      .select("id, amount, paid_amount, status")
+      .eq("lease_id", l.id);
+
+    if (invErr) {
+      toast.error(invErr.message);
+      return;
+    }
+
+    const hasUnpaid = (invoices ?? []).some(
+      (inv) => inv.status !== "paid" || Number(inv.paid_amount ?? 0) < Number(inv.amount)
+    );
+
+    if (hasUnpaid) {
+      toast.error(
+        `Cannot delete the lease for ${tenantName(l.tenant_id)} at ${unitLabel(l.unit_id)}. There are unpaid invoices. Terminate the lease and settle payments instead.`
+      );
+      return;
+    }
+
+    setLeaseToDeleteState(l);
+  };
+
+  const confirmDelete = async () => {
+    const l = leaseToDeleteState;
+    if (!l) return;
+
     const { error } = await supabase.from("leases").delete().eq("id", l.id);
-    if (error) toast.error(error.message);
-    else {
+    if (error) {
+      toast.error(error.message);
+    } else {
       toast.success("Lease deleted");
+      // Unit stays as is - historical lease, don't free occupied unit
       load();
     }
+    setLeaseToDeleteState(null);
   };
 
   return (
@@ -395,9 +558,15 @@ export default function Leases() {
                           <Button variant="ghost" size="icon" onClick={() => openEdit(l)}>
                             <Pencil className="h-4 w-4" />
                           </Button>
-                          <Button variant="ghost" size="icon" onClick={() => remove(l)}>
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
+                          {l.status === "active" ? (
+                            <Button variant="ghost" size="icon" onClick={() => openMoveOutDialog(l)}>
+                              <UserCheck className="h-4 w-4" />
+                            </Button>
+                          ) : (
+                            <Button variant="ghost" size="icon" onClick={() => remove(l)}>
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>
@@ -409,6 +578,7 @@ export default function Leases() {
         </Card>
       </div>
 
+      {/* Main Lease Dialog */}
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
@@ -444,7 +614,7 @@ export default function Leases() {
                 />
                 Show already leased tenants (special cases only)
               </label>
-              {form.tenant_id && leasedTenantIds.has(Number(form.tenant_id)) && (
+              {form.tenant_id && leasedTenantIds.has(Number(form.tenant_id)) && !showLeased && !editing && (
                 <p className="text-xs text-destructive">
                   This tenant already has an active lease on another unit.
                 </p>
@@ -708,6 +878,188 @@ export default function Leases() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Move-Out Reconciliation Dialog */}
+      <Dialog open={moveOutOpen} onOpenChange={setMoveOutOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Move-Out Reconciliation</DialogTitle>
+            <DialogDescription>
+              Settle the security deposit for {leaseForMoveOut ? `${tenantName(leaseForMoveOut.tenant_id)} at ${unitLabel(leaseForMoveOut.unit_id)}` : ""}.
+            </DialogDescription>
+          </DialogHeader>
+          {leaseForMoveOut && (
+            <div className="grid gap-4">
+              <div className="grid gap-2">
+                <Label>Deposit Details</Label>
+                <div className="bg-muted rounded-md p-3 grid gap-1 text-sm">
+                  <div className="flex justify-between">
+                    <span>Security Deposit Paid:</span>
+                    <span className="font-mono">KES {Number(leaseForMoveOut.deposit_amount ?? 0).toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Deposit Status:</span>
+                    <span>{leaseForMoveOut.deposit_paid ? "Paid" : "Unpaid"}</span>
+                  </div>
+                </div>
+              </div>
+
+              {leaseForMoveOut.deposit_paid && (
+                <>
+                  <div className="grid gap-2">
+                    <Label>Deductions (for damages, cleaning, etc.)</Label>
+                    {deductions.map((d, i) => (
+                      <div key={i} className="flex gap-2 items-center">
+                        <Input
+                          type="text"
+                          placeholder="Description"
+                          value={d.description}
+                          onChange={(e) =>
+                            setDeductions((prev) => {
+                              const copy = [...prev];
+                              copy[i] = { ...d, description: e.target.value };
+                              return copy;
+                            })
+                          }
+                        />
+                        <Input
+                          type="number"
+                          min={0}
+                          placeholder="Amount"
+                          value={d.amount}
+                          onChange={(e) =>
+                            setDeductions((prev) => {
+                              const copy = [...prev];
+                              copy[i] = { ...d, amount: Number(e.target.value) };
+                              return copy;
+                            })
+                          }
+                        />
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => setDeductions((prev) => prev.filter((_, j) => j !== i))}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setDeductions((prev) => [...prev, { type: "deduction", description: "", amount: 0 }])}
+                    >
+                      <Plus className="h-4 w-4 mr-1" /> Add deduction
+                    </Button>
+                  </div>
+
+                  <div className="grid gap-2">
+                    <Label>Refunds (for excess payments, overages, etc.)</Label>
+                    {refunds.map((r, i) => (
+                      <div key={i} className="flex gap-2 items-center">
+                        <Input
+                          type="text"
+                          placeholder="Description"
+                          value={r.description}
+                          onChange={(e) =>
+                            setRefunds((prev) => {
+                              const copy = [...prev];
+                              copy[i] = { ...r, description: e.target.value };
+                              return copy;
+                            })
+                          }
+                        />
+                        <Input
+                          type="number"
+                          min={0}
+                          placeholder="Amount"
+                          value={r.amount}
+                          onChange={(e) =>
+                            setRefunds((prev) => {
+                              const copy = [...prev];
+                              copy[i] = { ...r, amount: Number(e.target.value) };
+                              return copy;
+                            })
+                          }
+                        />
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => setRefunds((prev) => prev.filter((_, j) => j !== i))}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setRefunds((prev) => [...prev, { type: "refund", description: "", amount: 0 }])}
+                    >
+                      <Plus className="h-4 w-4 mr-1" /> Add refund
+                    </Button>
+                  </div>
+
+                  <div className="bg-muted rounded-md p-3 text-sm">
+                    <div className="flex justify-between font-medium">
+                      <span>Deposit Paid:</span>
+                      <span className="font-mono">KES {Number(leaseForMoveOut.deposit_amount ?? 0).toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Total Deductions:</span>
+                      <span className="text-destructive font-mono">- KES {deductions.reduce((s, d) => s + d.amount, 0).toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Total Refunds:</span>
+                      <span className="text-green-600 font-mono">+ KES {refunds.reduce((s, r) => s + r.amount, 0).toLocaleString()}</span>
+                    </div>
+                    <div className="border-t pt-2 flex justify-between text-lg font-bold">
+                      <span>Net Return:</span>
+                      <span className="text-blue-600">
+                        KES{" "}
+                        {Math.max(
+                          0,
+                          (Number(leaseForMoveOut.deposit_amount ?? 0) -
+                            deductions.reduce((s, d) => s + d.amount, 0) +
+                            refunds.reduce((s, r) => s + r.amount, 0))
+                        ).toLocaleString()}
+                      </span>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setMoveOutOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleMoveOut} disabled={moveOutSaving || !leaseForMoveOut}>
+              {moveOutSaving && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
+              Terminate Lease
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation */}
+      <AlertDialog open={leaseToDeleteState !== null} onOpenChange={(open) => setLeaseToDeleteState(open ? leaseToDeleteState : null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirm deletion</AlertDialogTitle>
+            <AlertDialogDescription>
+              Delete the lease for {leaseToDeleteState ? `${tenantName(leaseToDeleteState.tenant_id)} at ${unitLabel(leaseToDeleteState.unit_id)}` : ""}? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelete}>Delete</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </DashboardLayout>
   );
 }
+
+// Missing Badge import
+import { Badge } from "@/components/ui/badge";

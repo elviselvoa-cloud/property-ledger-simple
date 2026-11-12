@@ -1,11 +1,6 @@
 import { describe, expect, it } from "vitest";
-import {
-  buildInvoiceNoticeData,
-  buildInvoiceWhatsAppMessage,
-  invoicePeriodLabel,
-  normalizePhone,
-  type InvoiceNoticeData,
-} from "./invoice-notice";
+import { buildInvoiceNoticeData, buildInvoiceWhatsAppMessage, invoicePeriodLabel, type InvoiceNoticeData } from "./invoice-notice";
+import { normalizePhone } from "./phone";
 
 const base: InvoiceNoticeData = {
   invoiceNumber: "INV-202601-A1B2",

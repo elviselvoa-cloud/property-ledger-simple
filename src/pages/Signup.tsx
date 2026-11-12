@@ -3,13 +3,16 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { signUp } from "@/lib/supabase-auth";
+import { normalizePhone } from "@/lib/phone";
 import { useState } from "react";
 import { Link } from "wouter";
 import { toast } from "sonner";
 
 export default function Signup() {
   const [fullName, setFullName] = useState("");
+  const [businessName, setBusinessName] = useState("");
   const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -25,14 +28,40 @@ export default function Signup() {
       toast.error("Password must be at least 6 characters");
       return;
     }
+    const trimmedFullName = fullName.trim() || undefined;
+    const trimmedEmail = email.trim().toLowerCase();
+    const trimmedBusinessName = businessName.trim() || undefined;
+    const normalizedPhone = normalizePhone(phone) || undefined;
     setLoading(true);
-    const { error } = await signUp(email, password, fullName);
+    const metadata = {
+      full_name: trimmedFullName,
+      business_name: trimmedBusinessName,
+      phone: normalizedPhone,
+    };
+    const { error } = await signUp(trimmedEmail, password, metadata);
     setLoading(false);
     if (error) {
       toast.error(error.message);
     } else {
       setSent(true);
-      toast.success("Check your email to confirm your account");
+    }
+  };
+
+  const handleResend = async () => {
+    setLoading(true);
+    const trimmedEmail = email.trim().toLowerCase();
+    const normalizedPhone = normalizePhone(phone) || undefined;
+    const metadata = {
+      full_name: fullName.trim() || undefined,
+      business_name: businessName.trim() || undefined,
+      phone: normalizedPhone,
+    };
+    const { error } = await signUp(trimmedEmail, password, metadata);
+    setLoading(false);
+    if (error) {
+      toast.error(error.message);
+    } else {
+      toast.success("Confirmation email resent!");
     }
   };
 
@@ -44,9 +73,12 @@ export default function Signup() {
             <CardTitle>Check your email</CardTitle>
             <CardDescription>We sent a confirmation link to <strong>{email}</strong>. Click the link to activate your account.</CardDescription>
           </CardHeader>
-          <CardFooter className="justify-center">
-            <Link href="/login" className="text-primary hover:underline text-sm">Back to login</Link>
-          </CardFooter>
+          <CardContent className="flex flex-col gap-3 pt-4">
+            <Button variant="outline" onClick={handleResend} disabled={loading}>
+              {loading ? "Sending..." : "Resend confirmation"}
+            </Button>
+            <Link href="/login" className="text-sm text-primary hover:underline">Back to login</Link>
+          </CardContent>
         </Card>
       </div>
     );
@@ -66,16 +98,24 @@ export default function Signup() {
               <Input id="fullName" value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="John Doe" />
             </div>
             <div className="space-y-2">
+              <Label htmlFor="businessName">Business / Agency Name</Label>
+              <Input id="businessName" value={businessName} onChange={(e) => setBusinessName(e.target.value)} placeholder="e.g. Sunrise Properties" />
+            </div>
+            <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
               <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required placeholder="you@example.com" />
             </div>
             <div className="space-y-2">
+              <Label htmlFor="phone">Phone Number</Label>
+              <Input id="phone" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="0712 345 678" />
+            </div>
+            <div className="space-y-2">
               <Label htmlFor="password">Password</Label>
-              <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required placeholder="••••••••" />
+              <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required placeholder="Password" />
             </div>
             <div className="space-y-2">
               <Label htmlFor="confirmPassword">Confirm Password</Label>
-              <Input id="confirmPassword" type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required placeholder="••••••••" />
+              <Input id="confirmPassword" type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required placeholder="Confirm password" />
             </div>
           </CardContent>
           <CardFooter className="flex flex-col gap-3">

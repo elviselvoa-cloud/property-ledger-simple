@@ -1,6 +1,7 @@
 import type {
   Landlord, Property, RentInvoice, Tenant, Unit,
 } from "@/integrations/supabase/client";
+import { normalizePhone } from "./phone";
 
 export type InvoiceNoticeData = {
   invoiceNumber: string;
@@ -26,16 +27,6 @@ const MONTHS = [
 
 export const invoicePeriodLabel = (month: number, year: number) =>
   `${MONTHS[month - 1] ?? month} ${year}`;
-
-/** Normalizes Kenyan phone numbers for WhatsApp links. */
-export function normalizePhone(raw?: string | null): string | null {
-  if (!raw) return null;
-  let digits = raw.replace(/\D/g, "");
-  if (!digits) return null;
-  if (digits.startsWith("0")) digits = `254${digits.slice(1)}`;
-  else if (digits.startsWith("7") || digits.startsWith("1")) digits = `254${digits}`;
-  return digits.length >= 10 ? digits : null;
-}
 
 const formatKES = (n: number) =>
   `KES ${n.toLocaleString("en-KE", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;

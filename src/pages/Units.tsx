@@ -3,6 +3,16 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -107,6 +117,7 @@ export default function Units() {
   const [genOpen, setGenOpen] = useState(false);
   const [genSaving, setGenSaving] = useState(false);
   const [genForm, setGenForm] = useState<GenForm>(emptyGenForm);
+  const [unitToDelete, setUnitToDelete] = useState<Unit | null>(null);
 
   const load = useCallback(async () => {
     if (!landlordId) return;
@@ -189,13 +200,51 @@ export default function Units() {
   };
 
   const remove = async (u: Unit) => {
-    if (!confirm(`Delete unit ${u.unit_number}?`)) return;
-    const { error } = await supabase.from("units").delete().eq("id", u.id);
-    if (error) toast.error(error.message);
-    else {
+    // Check for active leases
+    const { data: activeLeases } = await supabase
+      .from("leases")
+      .select("id, tenant_id, status")
+      .eq("unit_id", u.id)
+      .eq("status", "active");
+    if (activeLeases && activeLeases.length > 0) {
+      const tenant = await supabase
+        .from("tenants")
+        .select("first_name, last_name")
+        .in("id", activeLeases.map((l) => l.tenant_id))
+        .maybeSingle();
+      toast.error(
+        `Cannot delete Unit ${u.unit_number}. It currently has an active lease for ${tenant?.data ? `${tenant.data.first_name} ${tenant.data.last_name}` : "a tenant"}. Terminate the lease before deleting the unit.`
+      );
+      return;
+    }
+    // Check for historical leases/invoices
+    const { data: anyLeases } = await supabase
+      .from("leases")
+      .select("id, status")
+      .eq("unit_id", u.id);
+    const { data: invoices } = await supabase
+      .from("rent_invoices")
+      .select("id")
+      .eq("unit_id", u.id);
+    if ((anyLeases && anyLeases.length > 0) || (invoices && invoices.length > 0)) {
+      toast.error(
+        `Unit ${u.unit_number} has lease or invoice history. Consider marking it as maintenance instead of deleting.`
+      );
+      return;
+    }
+    setUnitToDelete(u);
+  };
+
+  const confirmDelete = async () => {
+    if (!unitToDelete) return;
+    const { error } = await supabase.from("units").delete().eq("id", unitToDelete.id);
+    if (error) {
+      toast.error(error.message);
+    } else {
       toast.success("Unit deleted");
       load();
     }
+    setUnitToDelete(null);
   };
 
   const openGenerate = () => {
@@ -683,6 +732,21 @@ export default function Units() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={unitToDelete !== null} onOpenChange={(open) => setUnitToDelete(open ? unitToDelete : null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirm deletion</AlertDialogTitle>
+            <AlertDialogDescription>
+              Delete Unit {unitToDelete?.unit_number}? This action cannot be undone and may affect lease history.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelete}>Delete</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </DashboardLayout>
   );
 }

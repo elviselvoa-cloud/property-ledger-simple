@@ -40,6 +40,7 @@ export function useLandlord() {
               auth_id: user.id,
               email: user.email,
               name: user.user_metadata?.full_name ?? user.email?.split("@")[0],
+              phone: user.user_metadata?.phone ?? null,
             })
             .select("id")
             .single();
@@ -60,7 +61,11 @@ export function useLandlord() {
             .insert({
               user_id: userRow!.id,
               business_name:
-                user.user_metadata?.full_name ?? user.email?.split("@")[0] ?? null,
+                user.user_metadata?.business_name ||
+                user.user_metadata?.full_name ||
+                "My Properties",
+              phone: user.user_metadata?.phone ?? null,
+              onboarding_status: "pending",
             })
             .select("id")
             .single();

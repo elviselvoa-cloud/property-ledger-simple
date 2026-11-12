@@ -1,12 +1,16 @@
 import { supabase } from "@/integrations/supabase/client";
 
-export async function signUp(email: string, password: string, fullName?: string) {
+export async function signUp(
+  email: string,
+  password: string,
+  metadata?: { full_name?: string; business_name?: string; phone?: string }
+) {
   const redirectUrl = getRedirectUrl("/dashboard");
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
     options: {
-      data: { full_name: fullName },
+      data: metadata,
       emailRedirectTo: redirectUrl,
     },
   });

@@ -11,6 +11,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { useAuth } from "@/hooks/useAuth";
 import { useLandlord } from "@/hooks/useLandlord";
 import { supabase, type Landlord } from "@/integrations/supabase/client";
@@ -96,8 +104,7 @@ export default function Settings() {
         city: row.city ?? "",
         country: row.country ?? "Kenya",
       });
-      // If the migration (06_settings.sql) has not been run yet, the
-      // select("*") result simply won't contain these keys.
+      // Check if payment columns exist by checking for undefined fields
       if ("mpesa_paybill" in row) {
         setPay({
           mpesa_paybill: (row.mpesa_paybill as string | null) ?? "",
@@ -196,7 +203,7 @@ export default function Settings() {
         <div>
           <h2 className="text-2xl font-bold tracking-tight">Settings</h2>
           <p className="text-muted-foreground text-sm">
-            Manage your business profile, payment details and account.
+            Manage your business profile and account settings.
           </p>
         </div>
 
@@ -206,7 +213,7 @@ export default function Settings() {
           </Card>
         )}
 
-        {/* ─── Business profile ─────────────────────────── */}
+        {/* ─── Business profile ───────────────────────────────── */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
@@ -282,12 +289,12 @@ export default function Settings() {
                     Save business profile
                   </Button>
                 </div>
-              </>
-            )}
+            </>
+          )}
           </CardContent>
         </Card>
 
-        {/* ─── Payment details ──────────────────────────── */}
+        {/* ─── Payment details ───────────────────────────────── */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
@@ -353,7 +360,7 @@ export default function Settings() {
           </CardContent>
         </Card>
 
-        {/* ─── Subscription ─────────────────────────────── */}
+        {/* ─── Subscription ─────────────────────────────────── */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
@@ -392,7 +399,7 @@ export default function Settings() {
           </CardContent>
         </Card>
 
-        {/* ─── Account ──────────────────────────────────── */}
+        {/* ─── Account ──────────────────────────────────────── */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
@@ -416,7 +423,7 @@ export default function Settings() {
           </CardContent>
         </Card>
 
-        {/* ─── Security ─────────────────────────────────── */}
+        {/* ─── Security ─────────────────────────────────────── */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">

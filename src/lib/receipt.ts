@@ -1,4 +1,5 @@
 import type { Payment } from "@/integrations/supabase/client";
+import { normalizePhone } from "./phone";
 
 export type ReceiptData = {
   receiptNo: string;
@@ -24,19 +25,6 @@ const MONTHS = [
 
 export const periodLabel = (month: number, year: number) =>
   `${MONTHS[month - 1] ?? month} ${year}`;
-
-/**
- * Normalizes Kenyan phone numbers for WhatsApp links.
- * "0712345678" / "712345678" -> "254712345678", "+254712345678" -> "254712345678".
- */
-export function normalizePhone(raw?: string | null): string | null {
-  if (!raw) return null;
-  let digits = raw.replace(/\D/g, "");
-  if (!digits) return null;
-  if (digits.startsWith("0")) digits = `254${digits.slice(1)}`;
-  else if (digits.startsWith("7") || digits.startsWith("1")) digits = `254${digits}`;
-  return digits.length >= 10 ? digits : null;
-}
 
 const formatKES = (n: number) =>
   `KES ${n.toLocaleString("en-KE", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { normalizePhone, periodLabel, receiptText } from "./receipt";
+import { periodLabel, receiptText } from "./receipt";
+import { normalizePhone } from "./phone";
 
 describe("normalizePhone", () => {
   it("converts local 07xx numbers to 254 format", () => {

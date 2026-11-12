@@ -1,5 +1,5 @@
 import { cn } from "@/lib/utils";
-import { AlertTriangle, RotateCcw } from "lucide-react";
+import { AlertTriangle, RotateCcw, Home } from "lucide-react";
 import { Component, ReactNode } from "react";
 
 interface Props {
@@ -49,6 +49,17 @@ class ErrorBoundary extends Component<Props, State> {
             >
               <RotateCcw size={16} />
               Reload Page
+            </button>
+            <button
+              onClick={() => (window.location.href = "/")}
+              className={cn(
+                "flex items-center gap-2 px-4 py-2 rounded-lg",
+                "bg-muted text-muted-foreground",
+                "hover:bg-muted/80 cursor-pointer"
+              )}
+            >
+              <Home size={16} />
+              Go to Dashboard
             </button>
           </div>
         </div>

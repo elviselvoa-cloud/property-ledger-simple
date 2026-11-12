@@ -36,13 +36,20 @@ export default function Index() {
 
   useEffect(() => {
     if (!landlordId) return;
-    // Load landlord onboarding status
+
+    // Initialize showWizard based on onboarding status
     supabase
       .from("landlords")
       .select("onboarding_status")
       .eq("id", landlordId)
       .maybeSingle()
-      .then(({ data }) => setLandlordData(data as Landlord | null));
+      .then(({ data }) => {
+        const ld = data as Landlord | null;
+        setLandlordData(ld);
+        if (ld?.onboarding_status !== "completed") {
+          setShowWizard(true);
+        }
+      });
 
     const count = (table: string, extra?: (q: any) => any) => {
       let q = supabase.from(table).select("id", { count: "exact", head: true }).eq("landlord_id", landlordId);
@@ -106,6 +113,10 @@ export default function Index() {
     setLandlordData((d) => d ? { ...d, onboarding_status: "completed" } : null);
   };
 
+  const handleResumeSetup = async () => {
+    setShowWizard(true);
+  };
+
   const stats = [
     { label: "Properties", value: counts.properties, icon: Building2 },
     { label: "Total Units", value: counts.units, icon: DoorOpen },
@@ -127,7 +138,21 @@ export default function Index() {
     <>
       <OnboardingWizard
         landlordId={landlordId!}
-        onComplete={() => setShowWizard(false)}
+        open={showWizard}
+        onOpenChange={(open) => {
+          if (!open && landlordData?.onboarding_status === "completed") {
+            // Already completed, close without showing banner
+            setShowWizard(false);
+          } else if (!open) {
+            // User closed the wizard - remember they skipped it for this session
+            // but keep the resume banner available
+          }
+          setShowWizard(open);
+        }}
+        onComplete={() => {
+          setShowWizard(false);
+          setLandlordData((d) => d ? { ...d, onboarding_status: "completed" } : null);
+        }}
       />
 
       <DashboardLayout>
@@ -137,13 +162,13 @@ export default function Index() {
             <div className="flex items-center gap-3 rounded-lg border border-primary/30 bg-primary/5 px-4 py-3">
               <Settings className="h-5 w-5 text-primary shrink-0" />
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium">Welcome! Complete your setup</p>
+                <p className="text-sm font-medium">Setup incomplete — {showWizard ? 'Complete your setup' : 'Resume Setup'}</p>
                 <p className="text-xs text-muted-foreground">
-                  Set up your business profile, property, and first tenant in just a few steps.
+                  {!showWizard ? 'Set up your business profile, property, and units to get started.' : 'Finish setting up your account to unlock all features.'}
                 </p>
               </div>
               <Button size="sm" onClick={() => setShowWizard(true)}>
-                Setup now
+                {showWizard ? "Resume Setup" : "Setup now"}
               </Button>
               <Button variant="ghost" size="sm" onClick={() => setSkipPrompt(true)}>
                 Skip for now

@@ -2,6 +2,16 @@ import DashboardLayout from "@/components/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -56,6 +66,7 @@ export default function Tenants() {
   const [saving, setSaving] = useState(false);
   const [editing, setEditing] = useState<Tenant | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm);
+  const [tenantToDelete, setTenantToDelete] = useState<Tenant | null>(null);
 
   const load = useCallback(async () => {
     if (!landlordId) return;
@@ -127,13 +138,49 @@ export default function Tenants() {
   };
 
   const remove = async (t: Tenant) => {
-    if (!confirm(`Delete ${t.first_name} ${t.last_name}?`)) return;
-    const { error } = await supabase.from("tenants").delete().eq("id", t.id);
-    if (error) toast.error(error.message);
-    else {
+    // Check for active leases
+    const { data: activeLeases } = await supabase
+      .from("leases")
+      .select("id, unit_id, status")
+      .eq("tenant_id", t.id)
+      .eq("status", "active");
+    if (activeLeases && activeLeases.length > 0) {
+      toast.error(
+        `Cannot delete tenant ${t.first_name} ${t.last_name}. They are currently linked to an active lease on Unit ${activeLeases[0].unit_id}. Terminate the lease first.`
+      );
+      return;
+    }
+    // Check for outstanding invoices/balance
+    const { data: invoices } = await supabase
+      .from("rent_invoices")
+      .select("id, amount, paid_amount")
+      .eq("tenant_id", t.id)
+      .neq("status", "paid");
+    const hasOutstandingBalance = (invoices ?? []).some((inv) => {
+      const balance = Number(inv.amount) - Number(inv.paid_amount ?? 0);
+      return balance > 0;
+    });
+    if (hasOutstandingBalance) {
+      const totalUnpaid = (invoices ?? [])
+        .reduce((sum, inv) => sum + Math.max(0, Number(inv.amount) - Number(inv.paid_amount ?? 0)), 0);
+      toast.error(
+        `Cannot delete tenant ${t.first_name} ${t.last_name}. They have outstanding arrears of KES ${totalUnpaid.toLocaleString()}.`
+      );
+      return;
+    }
+    setTenantToDelete(t);
+  };
+
+  const confirmDelete = async () => {
+    if (!tenantToDelete) return;
+    const { error } = await supabase.from("tenants").delete().eq("id", tenantToDelete.id);
+    if (error) {
+      toast.error(error.message);
+    } else {
       toast.success("Tenant deleted");
       load();
     }
+    setTenantToDelete(null);
   };
 
   return (
@@ -308,6 +355,21 @@ export default function Tenants() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={tenantToDelete !== null} onOpenChange={(open) => setTenantToDelete(open ? tenantToDelete : null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirm deletion</AlertDialogTitle>
+            <AlertDialogDescription>
+              Delete {tenantToDelete?.first_name} {tenantToDelete?.last_name}? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelete}>Delete</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </DashboardLayout>
   );
 }
