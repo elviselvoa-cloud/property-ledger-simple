@@ -509,7 +509,7 @@ function FAQSection() {
 function Footer() {
   return (
     <footer className="py-12 px-4 border-t border-border">
-      <div className="max-w-6xl mx-auto grid sm:grid-cols-2 lg:grid-cols-4 gap-8">
+      <div className="max-w-6xl mx-auto grid sm:grid-cols-2 lg:grid-cols-3 gap-8">
         {/* Brand */}
         <div className="sm:col-span-2 lg:col-span-1">
           <div className="flex items-center gap-2 font-bold text-lg mb-3">
@@ -556,13 +556,6 @@ function Footer() {
           </ul>
         </div>
 
-        {/* Contact */}
-        <div>
-          <h4 className="font-semibold text-sm mb-3">Contact</h4>
-          <p className="text-sm text-muted-foreground mt-2">
-            support@propertyledger.ke
-          </p>
-        </div>
       </div>
       <div className="mt-12 text-center text-xs text-muted-foreground">
         © {new Date().getFullYear()} Property Ledger. All rights reserved.
