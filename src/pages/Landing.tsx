@@ -16,6 +16,13 @@ import {
   ChevronDown,
   Menu,
   X,
+  LayoutGrid,
+  Layers,
+  CreditCard,
+  HelpCircle,
+  User,
+  LogIn,
+  UserCircle,
 } from "lucide-react";
 import { Link } from "wouter";
 import { useState } from "react";
@@ -25,6 +32,13 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
 
 const kes = (n: number | null) => {
   if (n == null || n === 0) return "Free";
@@ -42,9 +56,10 @@ function Nav() {
   const [open, setOpen] = useState(false);
 
   const links = [
-    { label: "Features", href: "features" },
-    { label: "How It Works", href: "how-it-works" },
-    { label: "FAQs", href: "faqs" },
+    { label: "Features", href: "features", icon: LayoutGrid },
+    { label: "How It Works", href: "how-it-works", icon: Layers },
+    { label: "Pricing", href: "pricing", icon: CreditCard },
+    { label: "FAQ", href: "faqs", icon: HelpCircle },
   ];
 
   return (
@@ -87,51 +102,99 @@ function Nav() {
           </div>
 
           {/* Mobile toggle */}
-          <button
-            className="md:hidden p-2"
-            onClick={() => setOpen(!open)}
-            aria-label="Toggle menu"
-          >
-            {open ? <X className="size-5" /> : <Menu className="size-5" />}
-          </button>
+          <Sheet open={open} onOpenChange={setOpen}>
+            <SheetTrigger
+              asChild
+              className="md:hidden p-2"
+              aria-label="Toggle menu"
+            >
+              <button>
+                {open ? <X className="size-5" /> : <Menu className="size-5" />}
+              </button>
+            </SheetTrigger>
+            <SheetContent
+              side="left"
+              className="w-[280px] sm:w-[300px] max-w-[85vw] rounded-r-3xl bg-card border-r border-border p-0 shadow-2xl backdrop-blur-sm"
+            >
+              <div className="flex flex-col h-full">
+                {/* Header */}
+                <SheetHeader className="flex-row items-center gap-3 border-b border-border px-4 py-4">
+                  <div className="flex size-10 items-center justify-center rounded-xl bg-primary/10">
+                    <Building2 className="size-5 text-primary" />
+                  </div>
+                  <SheetTitle className="text-base font-bold tracking-tight p-0">
+                    Property Ledger
+                  </SheetTitle>
+                </SheetHeader>
+
+                {/* Navigation list */}
+                <div className="flex-1 overflow-y-auto px-2 py-3">
+                  <div className="flex flex-col gap-1">
+                    {links.map((l) => {
+                      const Icon = l.icon;
+                      return (
+                        <button
+                          key={l.href}
+                          onClick={() => {
+                            scrollTo(l.href);
+                            setOpen(false);
+                          }}
+                          className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                        >
+                          <Icon className="size-4 shrink-0" />
+                          <span>{l.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Footer section */}
+                <div className="mt-auto border-t border-border p-4 flex flex-col gap-3">
+                  {user ? (
+                    <>
+                      <div className="flex items-center gap-3">
+                        <div className="flex size-9 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
+                          {(user.email ?? "U").charAt(0).toUpperCase()}
+                        </div>
+                        <div className="flex flex-col min-w-0">
+                          <span className="text-sm font-medium truncate">
+                            {user.email ?? "Account"}
+                          </span>
+                          <span className="text-xs text-muted-foreground">
+                            Signed in
+                          </span>
+                        </div>
+                      </div>
+                      <Link href="/dashboard" className="w-full" onClick={() => setOpen(false)}>
+                        <Button className="w-full gap-2">
+                          <UserCircle className="size-4" />
+                          Go to Dashboard
+                        </Button>
+                      </Link>
+                    </>
+                  ) : (
+                    <div className="flex flex-col gap-2">
+                      <Link href="/login" className="w-full" onClick={() => setOpen(false)}>
+                        <Button variant="outline" className="w-full gap-2">
+                          <LogIn className="size-4" />
+                          Sign In
+                        </Button>
+                      </Link>
+                      <Link href="/signup" className="w-full" onClick={() => setOpen(false)}>
+                        <Button className="w-full gap-2">
+                          <User className="size-4" />
+                          Get Started
+                        </Button>
+                      </Link>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </SheetContent>
+          </Sheet>
         </div>
       </div>
-
-      {/* Mobile menu */}
-      {open && (
-        <div className="md:hidden border-t border-border bg-background px-4 py-4 space-y-3">
-          {links.map((l) => (
-            <button
-              key={l.href}
-              onClick={() => {
-                scrollTo(l.href);
-                setOpen(false);
-              }}
-              className="block w-full text-left text-sm text-muted-foreground hover:text-foreground"
-            >
-              {l.label}
-            </button>
-          ))}
-          <div className="flex flex-col gap-2 pt-2 border-t border-border">
-            {user ? (
-              <Link href="/dashboard">
-                <Button className="w-full">Go to Dashboard</Button>
-              </Link>
-            ) : (
-              <>
-                <Link href="/login" className="w-full">
-                  <Button variant="outline" className="w-full">
-                    Sign In
-                  </Button>
-                </Link>
-                <Link href="/signup" className="w-full">
-                  <Button className="w-full">Get Started</Button>
-                </Link>
-              </>
-            )}
-          </div>
-        </div>
-      )}
     </nav>
   );
 }
@@ -148,7 +211,7 @@ function Hero() {
         </Badge>
         <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight">
           Property &amp; tenancy management,{" "}
-          <span className="text-primary">built for modern landlords</span>
+          <span className="text-primary">built for landlords</span>
         </h1>
         <p className="mt-6 text-lg text-muted-foreground max-w-2xl mx-auto leading-relaxed">
           Track payments, send automated receipts, manage arrears, and streamline your property business in one intuitive dashboard.
