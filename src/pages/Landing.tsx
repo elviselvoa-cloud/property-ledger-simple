@@ -113,8 +113,8 @@ function Nav() {
               </button>
             </SheetTrigger>
             <SheetContent
-              side="left"
-              className="w-[280px] sm:w-[300px] max-w-[85vw] rounded-r-3xl bg-card border-r border-border p-0 shadow-2xl backdrop-blur-sm"
+              side="right"
+              className="w-[280px] sm:w-[300px] max-w-[85vw] rounded-l-3xl bg-card border-l border-border p-0 shadow-2xl backdrop-blur-sm"
             >
               <div className="flex flex-col h-full">
                 {/* Header */}
