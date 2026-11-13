@@ -13,7 +13,6 @@ import {
   Smartphone,
   Split,
   Hammer,
-  FileText,
   ChevronDown,
   Menu,
   X,
@@ -145,11 +144,11 @@ function Hero() {
     <section className="pt-32 pb-20 px-4">
       <div className="max-w-4xl mx-auto text-center">
         <Badge variant="secondary" className="mb-6 text-xs">
-          Made for Kenyan Landlords
+          Professional Property Management
         </Badge>
         <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight">
           Property &amp; tenancy management,{" "}
-          <span className="text-primary">built for Kenya</span>
+          <span className="text-primary">built for modern landlords</span>
         </h1>
         <p className="mt-6 text-lg text-muted-foreground max-w-2xl mx-auto leading-relaxed">
           Track payments, send automated receipts, manage arrears, and streamline your property business in one intuitive dashboard.
@@ -193,9 +192,9 @@ const FEATURES = [
     desc: "Record Paybill/Till transactions instantly, print branded receipts, and dispatch them directly to tenants via WhatsApp.",
   },
   {
-    icon: Split,
-    title: "Roommate & Co-Living Billing",
-    desc: "Generate shared single invoices or automate split invoicing with custom rent proportions per roommate.",
+    icon: TrendingUp,
+    title: "Expense Tracking & Cash Flow",
+    desc: "Record property expenses and compare them with rent collections to understand cash flow across your portfolio.",
   },
   {
     icon: DoorOpen,
@@ -260,7 +259,7 @@ const STEPS = [
   {
     n: "2",
     title: "Onboard Tenants & Leases",
-    desc: "Register tenants, configure lease terms, set billing preferences, and assign roommates where applicable.",
+    desc: "Register tenants, configure lease terms and deposits, and set billing preferences—including shared or split rent when needed.",
   },
   {
     n: "3",
@@ -332,7 +331,7 @@ const PLANS: Plan[] = [
       "Up to 50 units",
       "Multiple properties",
       "WhatsApp receipts",
-      "Roommate billing",
+      "Expense tracking & cash flow",
       "Caretaker assignments",
       "Exportable arrears reports",
     ],
@@ -472,12 +471,12 @@ const FAQS = [
     a: "No. Caretakers are assigned to specific buildings with restricted operational access. They cannot view payment records, arrears reports, or any financial information.",
   },
   {
-    q: "How does roommate / co-living invoicing work?",
-    a: "You can create a shared invoice for a unit and then split it by custom proportions per roommate. Each roommate gets their own line item and can be invoiced individually if preferred.",
+    q: "Can I track property expenses and cash flow?",
+    a: "Yes. Record expenses by property and review them alongside rent collections in your cash flow reports.",
   },
   {
     q: "Can I export reports for tax or accounting purposes?",
-    a: "Absolutely. All arrears aging reports, payment histories, and tenant statements can be exported as CSV files ready for your accountant or KRA filing.",
+    a: "Absolutely. Arrears aging reports, payment histories, and tenant statements can be exported as CSV files for your accountant or tax preparation.",
   },
 ];
 
@@ -518,8 +517,8 @@ function Footer() {
             Property Ledger
           </div>
           <p className="text-sm text-muted-foreground leading-relaxed">
-            Property and tenancy management built specifically for Kenyan
-            landlords, estates, and property agencies.
+            Property and tenancy management for independent landlords, estates,
+            and property agencies.
           </p>
         </div>
 
@@ -560,10 +559,6 @@ function Footer() {
         {/* Contact */}
         <div>
           <h4 className="font-semibold text-sm mb-3">Contact</h4>
-          <p className="text-sm text-muted-foreground flex items-center gap-1.5">
-            <FileText className="size-4" />
-            Nairobi, Kenya
-          </p>
           <p className="text-sm text-muted-foreground mt-2">
             support@propertyledger.ke
           </p>
