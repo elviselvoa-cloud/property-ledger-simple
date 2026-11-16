@@ -121,3 +121,4 @@ describe("buildInvoiceNoticeData", () => {
     expect(data.unitLabel).toBeNull();
     expect(data.balanceDue).toBe(0);
   });
+});
