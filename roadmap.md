@@ -8,8 +8,10 @@
 ## Next
 - [x] Step 2: Flexible bulk unit generator (rule builder + freeform paste)
 - [x] Prevent one tenant holding multiple units (opt-in override)
-- [x] Step 4: Landlord onboarding wizard (business profile → properties/units → tenants/leases → payment details)
-- [ ] Fix onboarding step persistence, add SMS gateway settings, and protect lease deletion
+- [x] Step 4: Landlord onboarding wizard (business profile → property/units → optional caretaker; tenants are added later)
+- [x] Save onboarding data before advancing each step
+- [ ] Add SMS gateway settings
+- [ ] Protect lease deletion and synchronize unit occupancy
 - [ ] M-Pesa Daraja integration (STK Push / C2B webhooks)
 - [x] Arrears & aging report, CSV export
 - [ ] Printable invoices & invoice notices to tenants

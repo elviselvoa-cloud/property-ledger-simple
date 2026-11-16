@@ -97,6 +97,7 @@ export default function OnboardingWizard({
   const [allUnits, setAllUnits] = useState<Unit[]>([]);
   const [createdPropertyId, setCreatedPropertyId] = useState<number | null>(null);
   const [createdPropertyName, setCreatedPropertyName] = useState<string>("");
+  const [createdCaretakerId, setCreatedCaretakerId] = useState<number | null>(null);
 
   // Step 1
   const [s1, setS1] = useState<Step1Form>({
@@ -160,6 +161,7 @@ export default function OnboardingWizard({
       setState({ step: 0, saving: false, error: null });
       setCreatedPropertyId(null);
       setCreatedPropertyName("");
+      setCreatedCaretakerId(null);
     }
   }, [open, hasCompleted]);
 
@@ -223,44 +225,61 @@ export default function OnboardingWizard({
           break;
         }
         case 1: {
-          const propRes = await supabase
-            .from("properties")
-            .insert({
-              landlord_id: landlordId,
-              name: s2.property_name.trim(),
-              address: s2.address.trim() || null,
-              city: s2.city.trim() || null,
-              total_units: s2.generated_units.length,
-              is_active: true,
-            })
-            .select("id")
-            .single();
-          if (propRes.error) throw propRes.error;
-          const propertyId = propRes.data!.id as number;
-          setCreatedPropertyId(propertyId);
+          let propertyId = createdPropertyId;
+          if (propertyId === null) {
+            const propRes = await supabase
+              .from("properties")
+              .insert({
+                landlord_id: landlordId,
+                name: s2.property_name.trim(),
+                address: s2.address.trim() || null,
+                city: s2.city.trim() || null,
+                total_units: s2.generated_units.length,
+                is_active: true,
+              })
+              .select("id")
+              .single();
+            if (propRes.error) throw propRes.error;
+            if (!propRes.data) throw new Error("Property could not be saved.");
+            propertyId = propRes.data.id;
+            setCreatedPropertyId(propertyId);
+          }
           setCreatedPropertyName(s2.property_name.trim());
           if (s2.generated_units.length > 0) {
-            const unitInserts = s2.generated_units.map((u) => ({
-              landlord_id: landlordId,
-              property_id: propertyId,
-              unit_number: u.unit_number,
-              floor: u.floor,
-              bedrooms: 1,
-              bathrooms: 1,
-              rent_amount: Number(s2.default_rent) || 10000,
-              deposit_amount: Number(s2.default_deposit) || 10000,
-              status: "vacant" as const,
-              is_active: true,
-            }));
-            const { error: unitErr } = await supabase.from("units").insert(unitInserts);
-            if (unitErr) throw unitErr;
+            const { data: existingUnits, error: existingUnitsError } = await supabase
+              .from("units")
+              .select("unit_number")
+              .eq("property_id", propertyId);
+            if (existingUnitsError) throw existingUnitsError;
+            const existingUnitNumbers = new Set(
+              (existingUnits ?? []).map((unit) => unit.unit_number.toLocaleLowerCase()),
+            );
+            const unitInserts = s2.generated_units
+              .filter((unit) => !existingUnitNumbers.has(unit.unit_number.toLocaleLowerCase()))
+              .map((unit) => ({
+                landlord_id: landlordId,
+                property_id: propertyId,
+                unit_number: unit.unit_number,
+                floor: unit.floor,
+                bedrooms: 1,
+                bathrooms: 1,
+                rent_amount: Number(s2.default_rent) || 10000,
+                deposit_amount: Number(s2.default_deposit) || 10000,
+                status: "vacant" as const,
+                is_active: true,
+              }));
+            if (unitInserts.length > 0) {
+              const { error: unitErr } = await supabase.from("units").insert(unitInserts);
+              if (unitErr) throw unitErr;
+            }
           }
           // Refresh units list for caretaker assignment
-          const { data } = await supabase
+          const { data, error: refreshError } = await supabase
             .from("units")
             .select("id, unit_number, property_id, status")
             .eq("landlord_id", landlordId)
             .order("created_at", { ascending: true });
+          if (refreshError) throw refreshError;
           if (data) setAllUnits(data as Unit[]);
           setState((prev) => ({ ...prev, step: prev.step + 1 }));
           break;
@@ -268,25 +287,40 @@ export default function OnboardingWizard({
         case 2: {
           // Caretaker assignment (optional)
           if (s3.caretaker_name.trim()) {
-            const caretakerRes = await supabase
-              .from("caretakers")
-              .insert({
-                landlord_id: landlordId,
-                name: s3.caretaker_name.trim(),
-                phone: s3.caretaker_phone.trim() || null,
-                is_active: true,
-              })
-              .select("id")
-              .single();
-            if (caretakerRes.error) throw caretakerRes.error;
-            const caretakerId = caretakerRes.data!.id as number;
+            let caretakerId = createdCaretakerId;
+            if (caretakerId === null) {
+              const caretakerRes = await supabase
+                .from("caretakers")
+                .insert({
+                  landlord_id: landlordId,
+                  name: s3.caretaker_name.trim(),
+                  phone: s3.caretaker_phone.trim() || null,
+                  is_active: true,
+                })
+                .select("id")
+                .single();
+              if (caretakerRes.error) throw caretakerRes.error;
+              if (!caretakerRes.data) throw new Error("Caretaker could not be saved.");
+              caretakerId = caretakerRes.data.id;
+              setCreatedCaretakerId(caretakerId);
+            }
             if (s3.selected_property_id) {
-              const { error: linkErr } = await supabase.from("caretaker_properties").insert({
-                caretaker_id: caretakerId,
-                property_id: Number(s3.selected_property_id),
-                landlord_id: landlordId,
-              });
-              if (linkErr) throw linkErr;
+              const propertyId = Number(s3.selected_property_id);
+              const { data: assignment, error: assignmentError } = await supabase
+                .from("caretaker_properties")
+                .select("caretaker_id")
+                .eq("caretaker_id", caretakerId)
+                .eq("property_id", propertyId)
+                .maybeSingle();
+              if (assignmentError) throw assignmentError;
+              if (!assignment) {
+                const { error: linkErr } = await supabase.from("caretaker_properties").insert({
+                  caretaker_id: caretakerId,
+                  property_id: propertyId,
+                  landlord_id: landlordId,
+                });
+                if (linkErr) throw linkErr;
+              }
             }
           }
           setState((prev) => ({ ...prev, step: prev.step + 1 }));
@@ -307,20 +341,16 @@ export default function OnboardingWizard({
         toast.success("Setup complete!");
         onComplete();
       }
+      setState((prev) => ({ ...prev, saving: false, error: null }));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
-      toast.error(err instanceof Error ? err.message : "Something went wrong");
-      setLoading(false);
+      const message = err instanceof Error ? err.message : "Something went wrong";
+      setState((prev) => ({ ...prev, saving: false, error: message }));
+      toast.error(message);
     }
   };
 
   const goNext = async () => {
-    if (!canProceed()) return;
-    if (state.step < 3) {
-      setState((prev) => ({ ...prev, step: prev.step + 1 }));
-    } else {
-      await nextStep();
-    }
+    await nextStep();
   };
 
   const goBack = () => {
@@ -338,9 +368,9 @@ export default function OnboardingWizard({
       toast.info("Onboarding skipped — you can always edit settings later.");
       onComplete();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to save");
+      const message = err instanceof Error ? err.message : "Failed to save";
+      setState((prev) => ({ ...prev, saving: false, error: message }));
       toast.error("Failed to save");
-      setLoading(false);
     }
   };
 
