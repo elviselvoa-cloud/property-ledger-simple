@@ -219,6 +219,7 @@ export default function OnboardingWizard({
             .update(updateFields)
             .eq("id", landlordId);
           if (error) throw error;
+          setState((prev) => ({ ...prev, step: prev.step + 1 }));
           break;
         }
         case 1: {
@@ -261,6 +262,7 @@ export default function OnboardingWizard({
             .eq("landlord_id", landlordId)
             .order("created_at", { ascending: true });
           if (data) setAllUnits(data as Unit[]);
+          setState((prev) => ({ ...prev, step: prev.step + 1 }));
           break;
         }
         case 2: {
@@ -287,6 +289,7 @@ export default function OnboardingWizard({
               if (linkErr) throw linkErr;
             }
           }
+          setState((prev) => ({ ...prev, step: prev.step + 1 }));
           break;
         }
       }
@@ -311,12 +314,12 @@ export default function OnboardingWizard({
     }
   };
 
-  const goNext = () => {
+  const goNext = async () => {
     if (!canProceed()) return;
     if (state.step < 3) {
       setState((prev) => ({ ...prev, step: prev.step + 1 }));
     } else {
-      nextStep();
+      await nextStep();
     }
   };
 

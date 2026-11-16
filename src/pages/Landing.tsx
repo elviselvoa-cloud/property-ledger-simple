@@ -361,142 +361,246 @@ function HowItWorks() {
 
 /* ─── Pricing ───────────────────────────────────────────── */
 
-interface Plan {
+interface BasePlan {
+  id: string;
   name: string;
-  monthly: number | null;
-  annual: number | null;
-  desc: string;
+  description: string;
+  basePrice: number; // Base price for core platform
+  pricePerUnit: number; // Additional per-unit cost
+  maxIncludedUnits: number; // Units included in base price
   features: string[];
   cta: string;
   highlighted?: boolean;
+  badge?: string;
 }
 
-const PLANS: Plan[] = [
+const BASE_PLANS: BasePlan[] = [
   {
-    name: "Starter",
-    monthly: 0,
-    annual: 0,
-    desc: "Perfect for landlords with a small portfolio.",
+    id: "basic",
+    name: "Basic",
+    description: "Core property management for small landlords.",
+    basePrice: 0,
+    pricePerUnit: 0,
+    maxIncludedUnits: 10,
     features: [
-      "Up to 10 units",
-      "1 property",
-      "Basic invoicing",
-      "Rent receipts",
+      "M-Pesa Paybill/Till integration",
+      "Basic tenant portal",
+      "Payment tracking",
+      "Document storage",
+      "1 property limit",
     ],
-    cta: "Start for Free",
+    cta: "Start Free",
+    badge: "Free Forever",
   },
   {
-    name: "Growth",
-    monthly: 2500,
-    annual: 25000,
-    desc: "For growing portfolios that need automation.",
+    id: "professional",
+    name: "Professional",
+    description: "Everything you need to scale your property business.",
+    basePrice: 2500,
+    pricePerUnit: 150,
+    maxIncludedUnits: 50,
     features: [
-      "Up to 50 units",
-      "Multiple properties",
-      "WhatsApp receipts",
+      "WhatsApp automated receipts",
       "Expense tracking & cash flow",
-      "Caretaker assignments",
-      "Exportable arrears reports",
-    ],
-    cta: "Start 14-Day Free Trial",
-    highlighted: true,
-  },
-  {
-    name: "Commercial / Agency",
-    monthly: 6000,
-    annual: 60000,
-    desc: "Unlimited scale for agencies and large portfolios.",
-    features: [
-      "Unlimited units & properties",
-      "Unlimited caretakers",
-      "Advanced aging analytics",
-      "Priority support",
-      "Everything in Growth",
+      "Caretaker management",
+      "Arrears aging reports",
+      "Bulk invoice generator",
+      "Custom fields",
     ],
     cta: "Get Started",
+    highlighted: true,
+    badge: "Most Popular",
+  },
+  {
+    id: "enterprise",
+    name: "Enterprise",
+    description: "Unlimited scale for agencies and large portfolios.",
+    basePrice: 6000,
+    pricePerUnit: 100,
+    maxIncludedUnits: 200,
+    features: [
+      "Unlimited units & properties",
+      "Advanced analytics dashboard",
+      "Priority support",
+      "Exportable reports",
+      "API access",
+      "Multi-user accounts",
+    ],
+    cta: "Contact Sales",
+    badge: "For Agencies",
   },
 ];
 
+// Service add-ons with flat monthly pricing
+const ADD_ONS = [
+  {
+    id: "marketing",
+    name: "Marketing Suite",
+    price: 500,
+    features: ["Tenant portal branding", "Listing syndication", "Lead management"],
+  },
+  {
+    id: "accounting",
+    name: "Accounting Pro",
+    price: 1000,
+    features: ["Auto-categorize expenses", "Tax reports", "Bank reconciliation"],
+  },
+  {
+    id: "maintenance",
+    name: "Maintenance Manager",
+    price: 800,
+    features: ["Work order system", "Vendor marketplace", "Service scheduling"],
+  },
+];
+
+interface PricingProps {
+  selectedPlan: string;
+  units: number;
+  addOns: string[];
+  billingCycle: "monthly" | "annual";
+}
+
 function Pricing() {
   const [annual, setAnnual] = useState(true);
+  const [units, setUnits] = useState(25);
+  const [selectedAddOns, setSelectedAddOns] = useState<string[]>([]);
+
+  const calculatePrice = (plan: BasePlan) => {
+    const baseFee = annual ? plan.basePrice * 12 * 0.85 : plan.basePrice;
+    const includedUnits = Math.min(units, plan.maxIncludedUnits);
+    const extraUnits = Math.max(0, units - plan.maxIncludedUnits);
+    const perUnitFee = extraUnits * (annual ? plan.pricePerUnit * 12 * 0.85 : plan.pricePerUnit);
+    const addOnFee = selectedAddOns.reduce((sum, id) => {
+      const addon = ADD_ONS.find(a => a.id === id);
+      const price = addon?.price ?? 0;
+      return sum + (annual ? price * 12 * 0.85 : price);
+    }, 0);
+    return baseFee + perUnitFee + addOnFee;
+  };
 
   return (
     <section id="pricing" className="py-20 px-4 bg-accent/40">
-      <div className="max-w-5xl mx-auto">
-        <div className="text-center mb-10">
-          <h2 className="text-3xl font-bold tracking-tight">Simple Pricing</h2>
-          <p className="mt-3 text-muted-foreground">
-            Pick the plan that fits your portfolio.
+      <div className="max-w-6xl mx-auto">
+        <div className="text-center mb-12">
+          <h2 className="text-3xl font-bold tracking-tight mb-4">
+            Flexible, Per-Unit Pricing
+          </h2>
+          <p className="text-lg text-muted-foreground max-w-2xl mx-auto mb-6">
+            Pay for what you use. Pricing scales with your portfolio size.
+            Choose a base plan, then add services as your business grows.
           </p>
 
-          {/* Toggle */}
-          <div className="mt-8 inline-flex items-center gap-3 bg-card rounded-full border border-border p-1">
-            <button
-              onClick={() => setAnnual(false)}
-              className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all ${
-                !annual
-                  ? "bg-primary text-primary-foreground"
-                  : "text-muted-foreground"
-              }`}
-            >
-              Monthly
-            </button>
-            <button
-              onClick={() => setAnnual(true)}
-              className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all ${
-                annual
-                  ? "bg-primary text-primary-foreground"
-                  : "text-muted-foreground"
-              }`}
-            >
-              Annual{" "}
-              <span className="text-[10px] bg-green-500/20 text-green-700 dark:text-green-400 px-1.5 py-0.5 rounded-full ml-1">
-                ~17% off
+          {/* Unit Calculator */}
+          <div className="mb-8 p-4 bg-card rounded-lg border border-border max-w-md mx-auto">
+            <label className="block text-sm font-medium mb-2">
+              How many units do you manage?
+            </label>
+            <input
+              type="number"
+              min="1"
+              max="500"
+              value={units}
+              onChange={(e) => setUnits(parseInt(e.target.value) || 1)}
+              className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground text-center text-lg font-medium"
+            />
+            <div className="text-xs text-muted-foreground mt-2">
+              Based on {units} units, your estimate:{" "}
+              <span className="font-medium text-primary">
+                {units <= 10 ? "Free" : `KES ${calculatePrice(BASE_PLANS[0]).toLocaleString("en-KE", { maximumFractionDigits: 0 })}/mo`}
               </span>
-            </button>
+            </div>
+          </div>
+
+          {/* Billing Toggle */}
+          <div className="mb-10">
+            <div className="inline-flex items-center gap-3 bg-card rounded-full border border-border p-1">
+              <button
+                onClick={() => setAnnual(false)}
+                className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all ${
+                  !annual
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground"
+                }`}
+              >
+                Monthly
+              </button>
+              <button
+                onClick={() => setAnnual(true)}
+                className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all ${
+                  annual
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground"
+                }`}
+              >
+                Annual{" "}
+                <span className="text-[10px] bg-green-500/20 text-green-700 dark:text-green-400 px-1.5 py-0.5 rounded-full ml-1">
+                  17% off
+                </span>
+              </button>
+            </div>
           </div>
         </div>
 
         <div className="grid md:grid-cols-3 gap-6">
-          {PLANS.map((plan) => {
-            const price = annual ? plan.annual : plan.monthly;
+          {BASE_PLANS.map((plan) => {
+            const price = calculatePrice(plan);
+            const isFree = price === 0;
+
             return (
               <Card
-                key={plan.name}
+                key={plan.id}
                 className={[
                   "flex flex-col",
-                  plan.highlighted ? "border-primary shadow-lg relative" : "",
+                  plan.highlighted ? "border-primary shadow-xl relative" : "border-border",
                 ]
                   .filter(Boolean)
                   .join(" ")}
               >
-                {plan.highlighted && (
-                  <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                    <Badge className="bg-primary text-primary-foreground text-xs">
-                      Most Popular
+                {plan.badge && (
+                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 z-10">
+                    <Badge className={plan.highlighted ? "bg-primary" : "bg-secondary text-secondary-foreground"}>
+                      {plan.badge}
                     </Badge>
                   </div>
                 )}
                 <CardContent className="pt-8 flex flex-col flex-1">
-                  <h3 className="font-semibold text-lg">{plan.name}</h3>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    {plan.desc}
+                  <h3 className="font-semibold text-xl">{plan.name}</h3>
+                  <p className="text-sm text-muted-foreground mt-2">
+                    {plan.description}
                   </p>
-                  <div className="mt-6 mb-6">
-                    {price === 0 ? (
-                      <span className="text-4xl font-bold">Free</span>
+
+                  <div className="my-6">
+                    {isFree ? (
+                      <span className="text-3xl font-bold text-green-600">Free</span>
                     ) : (
-                      <div className="flex items-baseline gap-1">
+                      <div className="flex items-baseline gap-2">
                         <span className="text-3xl font-bold">
-                          {kes(price)}
+                          {annual ? "KES " : "KES "}
+                          {plan.basePrice.toLocaleString("en-KE", { maximumFractionDigits: 0 })}
                         </span>
+                        {plan.pricePerUnit > 0 && (
+                          <span className="text-sm text-muted-foreground">
+                            +{plan.pricePerUnit}/unit/mo
+                          </span>
+                        )}
                         <span className="text-sm text-muted-foreground">
-                          /{annual ? "yr" : "mo"}
+                          {annual ? "/yr" : "/mo"}
                         </span>
                       </div>
                     )}
                   </div>
-                  <ul className="space-y-2 flex-1">
+
+                  {/* Current estimate based on user input */}
+                  {!isFree && (
+                    <div className="mb-4 p-3 bg-muted/50 rounded-lg">
+                      <div className="text-xs text-muted-foreground mb-1">Your estimate ({units} units):</div>
+                      <div className="text-lg font-semibold text-primary">
+                        {kes(price)}
+                      </div>
+                    </div>
+                  )}
+
+                  <ul className="space-y-2 flex-1 mb-6">
                     {plan.features.map((f) => (
                       <li key={f} className="flex items-start gap-2 text-sm">
                         <CheckCircle2 className="size-4 text-primary shrink-0 mt-0.5" />
@@ -504,7 +608,7 @@ function Pricing() {
                       </li>
                     ))}
                   </ul>
-                  <Link href="/signup" className="mt-8">
+                  <Link href={plan.id === "enterprise" ? "/contact-sales" : "/signup"} className="mt-auto">
                     <Button
                       className="w-full"
                       variant={plan.highlighted ? "default" : "outline"}
@@ -516,6 +620,54 @@ function Pricing() {
               </Card>
             );
           })}
+        </div>
+
+        {/* Service Add-ons Section */}
+        <div className="mt-16">
+          <h3 className="text-xl font-bold text-center mb-6">
+            Add-On Services
+          </h3>
+          <p className="text-center text-muted-foreground mb-8 max-w-2xl mx-auto">
+            Enhance your property management with optional services. Add as many as you need.
+          </p>
+
+          <div className="grid md:grid-cols-3 gap-4 max-w-3xl mx-auto">
+            {ADD_ONS.map((addon) => (
+              <Card
+                key={addon.id}
+                className={selectedAddOns.includes(addon.id) ? "border-primary bg-primary/5" : "border-border"}
+              >
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <h4 className="font-semibold">{addon.name}</h4>
+                    <span className="font-bold text-primary">KES {(addon as any).price}/mo</span>
+                  </div>
+                  <ul className="text-sm text-muted-foreground mb-3">
+                    {addon.features.slice(0, 2).map(f => (
+                      <li key={f} className="flex items-start gap-1">
+                        <CheckCircle2 className="size-3 mt-0.5" />
+                        {f}
+                      </li>
+                    ))}
+                  </ul>
+                  <button
+                    onClick={() => setSelectedAddOns(
+                      selectedAddOns.includes(addon.id)
+                        ? selectedAddOns.filter(id => id !== addon.id)
+                        : [...selectedAddOns, addon.id]
+                    )}
+                    className={`w-full text-sm py-1 rounded transition-colors ${
+                      selectedAddOns.includes(addon.id)
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-muted hover:bg-muted/80"
+                    }`}
+                  >
+                    {selectedAddOns.includes(addon.id) ? "Selected" : "Add Service"}
+                  </button>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
         </div>
       </div>
     </section>

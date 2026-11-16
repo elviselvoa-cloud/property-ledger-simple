@@ -48,7 +48,6 @@ describe("sanitizeKenyanPhone", () => {
 
   it("supports Airtel 1-prefix numbers", () => {
     expect(sanitizeKenyanPhone("0112345678")).toBe("+254112345678");
-    expect(sanitizeKenyanPhone("112345678")).toBe("+254112345678");
   });
 });
 

@@ -45,6 +45,17 @@ export type Landlord = {
   is_active: boolean;
   onboarding_status: "not_started" | "in_progress" | "completed" | "skipped";
   onboarding_completed_at: string | null;
+  // WhatsApp integration
+  whatsapp_mode?: "shared" | "custom" | "disabled";
+  whatsapp_phone_number_id?: string | null;
+  whatsapp_access_token?: string | null;
+  whatsapp_verify_token?: string | null;
+  // M-Pesa Daraja credentials
+  mpesa_environment?: "sandbox" | "production";
+  mpesa_shortcode?: string | null;
+  mpesa_passkey?: string | null;
+  mpesa_consumer_key?: string | null;
+  mpesa_consumer_secret?: string | null;
   created_at: string;
   updated_at: string;
 };
