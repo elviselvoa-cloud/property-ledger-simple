@@ -58,7 +58,7 @@ function Nav() {
   const links = [
     { label: "Features", href: "features", icon: LayoutGrid },
     { label: "How It Works", href: "how-it-works", icon: Layers },
-    { label: "Pricing", href: "pricing", icon: CreditCard },
+    // { label: "Pricing", href: "pricing", icon: CreditCard },
     { label: "FAQ", href: "faqs", icon: HelpCircle },
   ];
 
@@ -741,7 +741,7 @@ function Footer() {
         <div>
           <h4 className="font-semibold text-sm mb-3">Quick Links</h4>
           <ul className="space-y-2 text-sm text-muted-foreground">
-            {["features", "how-it-works", "pricing", "faqs"].map((href) => {
+            {["features", "how-it-works", "faqs"].map((href) => {
               const label =
                 href.charAt(0).toUpperCase() +
                 href.replace(/-/g, " ").slice(1);
@@ -788,7 +788,7 @@ export default function Landing() {
       <Hero />
       <Features />
       <HowItWorks />
-      <Pricing />
+      {/* <Pricing /> */}
       <FAQSection />
       <Footer />
     </div>

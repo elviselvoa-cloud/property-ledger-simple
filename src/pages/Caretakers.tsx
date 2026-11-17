@@ -26,6 +26,7 @@ import { useLandlord } from "@/hooks/useLandlord";
 import {
   supabase,
   type Caretaker,
+  type CaretakerProperty,
   type Property,
 } from "@/integrations/supabase/client";
 import { HardHat, Loader2, Pencil, Plus, Trash2 } from "lucide-react";
@@ -52,7 +53,7 @@ const emptyForm: FormState = {
   propertyIds: [],
 };
 
-type Assignment = { caretaker_id: number; property_id: number };
+type Assignment = { caretaker_id: number; property_id: number; landlord_id: number | null };
 
 export default function Caretakers() {
   const { landlordId, loading: landlordLoading, error: landlordError } = useLandlord();
@@ -82,7 +83,7 @@ export default function Caretakers() {
         .order("name"),
       supabase
         .from("caretaker_properties")
-        .select("caretaker_id, property_id")
+        .select("caretaker_id, property_id, landlord_id")
         .eq("landlord_id", landlordId),
     ]);
     if (caretakersRes.error) toast.error(caretakersRes.error.message);
@@ -90,7 +91,7 @@ export default function Caretakers() {
     if (assignmentsRes.error) toast.error(assignmentsRes.error.message);
     setRows((caretakersRes.data ?? []) as Caretaker[]);
     setProperties((propertiesRes.data ?? []) as Property[]);
-    setAssignments((assignmentsRes.data ?? []) as Assignment[]);
+    setAssignments((assignmentsRes.data ?? []) as CaretakerProperty[]);
     setLoading(false);
   }, [landlordId]);
 

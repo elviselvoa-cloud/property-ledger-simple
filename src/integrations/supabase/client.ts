@@ -177,6 +177,13 @@ export type Caretaker = {
   updated_at: string;
 };
 
+export type CaretakerProperty = {
+  id: number;
+  caretaker_id: number;
+  property_id: number;
+  landlord_id: number;
+};
+
 export type Expense = {
   id: number;
   landlord_id: number;
