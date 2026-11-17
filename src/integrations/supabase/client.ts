@@ -173,6 +173,11 @@ export type Caretaker = {
   national_id: string | null;
   notes: string | null;
   is_active: boolean;
+  auth_user_id: string | null;
+  invite_token: string | null;
+  invite_sent_at: string | null;
+  account_created_at: string | null;
+  last_signed_in: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -182,6 +187,15 @@ export type CaretakerProperty = {
   caretaker_id: number;
   property_id: number;
   landlord_id: number;
+};
+
+export type CaretakerPermission = {
+  id: number;
+  caretaker_id: number;
+  tab_key: string;
+  enabled: boolean;
+  created_at: string;
+  updated_at: string;
 };
 
 export type Expense = {
