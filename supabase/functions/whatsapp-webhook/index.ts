@@ -175,7 +175,7 @@ async function processCommand(
 
   // Handle commands
   if (["balance", "rent", "deni"].includes(cmd)) {
-    const { data: invoices } = await supabase as any
+    const { data: invoices } = await (supabase as any)
       .from("rent_invoices")
       .select("amount, due_date, status, period_month")
       .eq("tenant_id", tenant?.id)
@@ -318,7 +318,6 @@ async function initiateSTKPush(
 }
 
 async function getMpesaAccessToken(landlordId: string): Promise<string> {
-  // In production, this would use the landlord's Daraja credentials
   const { data: landlord } = await supabase
     .from("landlords")
     .select("mpesa_consumer_key, mpesa_consumer_secret, mpesa_environment")
