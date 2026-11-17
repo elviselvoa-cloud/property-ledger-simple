@@ -6,6 +6,7 @@ import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
+import CaretakerSetPassword from "./pages/CaretakerSetPassword";
 import Properties from "./pages/Properties";
 import Units from "./pages/Units";
 import Tenants from "./pages/Tenants";
@@ -19,8 +20,23 @@ import Expenses from "./pages/Expenses";
 import Communications from "./pages/Communications";
 import Landing from "./pages/Landing";
 
+// Tab-key → route-path mapping
+const TAB_ROUTE_MAP: Record<string, string> = {
+  properties: "/properties",
+  units: "/units",
+  tenants: "/tenants",
+  leases: "/leases",
+  payments: "/payments",
+  invoices: "/invoices",
+  expenses: "/expenses",
+  communications: "/communications",
+  caretakers: "/caretakers",
+  reports: "/reports",
+  settings: "/settings",
+};
+
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
-  const { user, loading } = useAuth();
+  const { user, loading, caretaker } = useAuth();
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -29,6 +45,7 @@ function ProtectedRoute({ component: Component }: { component: React.ComponentTy
     );
   }
   if (!user) return <Redirect to="/login" />;
+  if (caretaker) return <Component />;
   return <Component />;
 }
 
@@ -52,6 +69,7 @@ function Router() {
       <Route path="/signup">{() => <GuestRoute component={Signup} />}</Route>
       <Route path="/forgot-password">{() => <GuestRoute component={ForgotPassword} />}</Route>
       <Route path="/reset-password" component={ResetPassword} />
+      <Route path="/caretaker-set-password" component={CaretakerSetPassword} />
       <Route path="/dashboard">{() => <ProtectedRoute component={Index} />}</Route>
       <Route path="/properties">{() => <ProtectedRoute component={Properties} />}</Route>
       <Route path="/units">{() => <ProtectedRoute component={Units} />}</Route>
